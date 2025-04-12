@@ -343,8 +343,8 @@ set CGO_ENABLED=1
 set CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus
 set CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm
 set PATH=C:/msys64/mingw64/bin;%PATH%
-set VERSION=${VERSION_VALUE}
-set OUTPUT_NAME=${OUTPUT_NAME}
+set VERSION=$VERSION_VALUE
+set OUTPUT_NAME=$OUTPUT_NAME
 
 echo ========== 尝试直接构建 ==========
 go build -v -o %OUTPUT_NAME% -ldflags "-X main.Version=%VERSION%" ./cmd/client
@@ -364,6 +364,9 @@ if exist %OUTPUT_NAME% (
   exit /b 1
 )
 EOL
+          # 替换环境变量
+          sed -i "s/\$VERSION_VALUE/$VERSION_VALUE/g" windows_build.cmd
+          sed -i "s/\$OUTPUT_NAME/$OUTPUT_NAME/g" windows_build.cmd
           cmd /c "windows_build.cmd" 2>&1 | tee build_log.txt
           
           # 检查是否构建成功
@@ -380,8 +383,8 @@ $env:CGO_ENABLED = '1'
 $env:CGO_CFLAGS = '-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus'
 $env:CGO_LDFLAGS = '-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm'
 $env:PATH = 'C:/msys64/mingw64/bin;' + $env:PATH
-$outputName = '${OUTPUT_NAME}'
-$version = '${VERSION_VALUE}'
+$outputName = 'OUTPUT_NAME_PLACEHOLDER'
+$version = 'VERSION_VALUE_PLACEHOLDER'
 
 Write-Host '========== 尝试PowerShell构建 =========='
 try {
@@ -412,6 +415,9 @@ try {
   exit 1
 }
 EOL
+            # 替换环境变量
+            sed -i "s/OUTPUT_NAME_PLACEHOLDER/$OUTPUT_NAME/g" windows_build.ps1
+            sed -i "s/VERSION_VALUE_PLACEHOLDER/$VERSION_VALUE/g" windows_build.ps1
             powershell -ExecutionPolicy Bypass -File windows_build.ps1 2>&1 | tee -a build_log.txt
           fi
           
