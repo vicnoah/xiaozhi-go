@@ -110,7 +110,19 @@ jobs:
         
         # 直接设置C和Go的编译标志
         echo "CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus" >> $GITHUB_ENV
-        echo "CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio" >> $GITHUB_ENV
+        echo "CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm" >> $GITHUB_ENV
+        
+        # 将库文件复制到系统路径
+        echo "========== 复制库文件到系统路径 =========="
+        mkdir -p C:/Windows/System32/temp_libs
+        cp -v C:/msys64/mingw64/bin/libopus*.dll C:/Windows/System32/temp_libs/ || echo "找不到libopus.dll"
+        cp -v C:/msys64/mingw64/bin/libportaudio*.dll C:/Windows/System32/temp_libs/ || echo "找不到libportaudio.dll"
+        cp -v C:/msys64/mingw64/lib/libopus*.a C:/Windows/System32/temp_libs/ || echo "找不到libopus.a"
+        cp -v C:/msys64/mingw64/lib/libportaudio*.a C:/Windows/System32/temp_libs/ || echo "找不到libportaudio.a"
+        
+        # 设置库搜索路径
+        echo "LIB=C:\Windows\System32\temp_libs;%LIB%" >> $GITHUB_ENV
+        echo "LIBRARY_PATH=C:\Windows\System32\temp_libs;C:\msys64\mingw64\lib;%LIBRARY_PATH%" >> $GITHUB_ENV
         
         # 使用我们的脚本创建pkg-config文件
         chmod +x .github/windows-pkgconfig.sh
@@ -118,22 +130,80 @@ jobs:
         # 添加我们自定义的pkgconfig路径
         echo "PKG_CONFIG_PATH=C:/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         
-        # 尝试从Windows环境验证库位置
-        dir C:\msys64\mingw64\lib | findstr opus
-        dir C:\msys64\mingw64\lib | findstr portaudio
-        dir C:\msys64\mingw64\include | findstr opus
-        dir C:\msys64\mingw64\include | findstr portaudio
+        # 检查库和头文件是否存在
+        echo "=========== 检查opus和portaudio库文件 ==========="
+        dir "C:\msys64\mingw64\lib\*.a" | findstr opus
+        dir "C:\msys64\mingw64\lib\*.a" | findstr portaudio
+        dir "C:\msys64\mingw64\include" /s /b | findstr opus
+        dir "C:\msys64\mingw64\include" /s /b | findstr portaudio
+        dir "C:\msys64\mingw64\lib\pkgconfig" /b
         
         # 使用msys2 bash验证opus库是否可用
-        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opus || true"
-        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opusfile || true"
-        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags portaudio-2.0 || true"
+        echo "=========== PKG-CONFIG结果 ==========="
+        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opus || echo 'opus pkg-config失败'"
+        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opusfile || echo 'opusfile pkg-config失败'"
+        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags portaudio-2.0 || echo 'portaudio pkg-config失败'"
         # 列出已安装的包
+        echo "=========== 已安装的包 ==========="
         C:\msys64\usr\bin\bash -lc "pacman -Q | grep opus"
         C:\msys64\usr\bin\bash -lc "pacman -Q | grep portaudio"
 
     - name: 获取依赖
       run: go mod tidy
+
+    - name: 诊断CGO配置 (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "============= 检查CGO和GCC配置 ============="
+        # 显示go环境变量
+        go env | grep -E "CGO|C_"
+        
+        # 检查gcc版本
+        gcc --version || echo "无法找到gcc"
+        
+        # 检查MinGW安装情况
+        dir C:\msys64\mingw64\bin\gcc.exe || echo "找不到MinGW gcc"
+        
+        # 创建一个简单的C测试程序
+        echo '#include <stdio.h>' > test.c
+        echo 'int main() { printf("Hello, World!\n"); return 0; }' >> test.c
+        
+        # 尝试编译
+        echo "使用gcc编译简单C程序:"
+        gcc test.c -o test.exe && echo "C编译成功" || echo "C编译失败"
+        
+        # 创建一个使用cgo的简单程序
+        echo 'package main' > test.go
+        echo 'import "C"' >> test.go
+        echo 'import "fmt"' >> test.go
+        echo 'func main() { fmt.Println("CGO测试") }' >> test.go
+        
+        # 尝试编译
+        echo "使用go build编译CGO程序:"
+        go build -o test_go.exe test.go && echo "CGO编译成功" || echo "CGO编译失败"
+        
+        # 检查opus和portaudio库链接情况
+        echo "============= 检查OPUS库链接 ============="
+        echo '#include <stdio.h>' > opus_test.c
+        echo '#include <opus/opus.h>' >> opus_test.c
+        echo 'int main() { printf("Opus版本: %s\n", opus_get_version_string()); return 0; }' >> opus_test.c
+        
+        # 尝试编译链接opus
+        echo "尝试编译链接opus库:"
+        gcc -o opus_test.exe opus_test.c -I"C:/msys64/mingw64/include" -L"C:/msys64/mingw64/lib" -lopus && \
+          echo "Opus编译成功" && ./opus_test.exe || echo "Opus编译失败"
+        
+        # 检查portaudio库
+        echo "============= 检查PortAudio库链接 ============="
+        echo '#include <stdio.h>' > pa_test.c
+        echo '#include <portaudio.h>' >> pa_test.c
+        echo 'int main() { printf("PortAudio版本: %d\n", Pa_GetVersion()); return 0; }' >> pa_test.c
+        
+        # 尝试编译链接portaudio
+        echo "尝试编译链接portaudio库:"
+        gcc -o pa_test.exe pa_test.c -I"C:/msys64/mingw64/include" -L"C:/msys64/mingw64/lib" -lportaudio -lwinmm && \
+          echo "PortAudio编译成功" && ./pa_test.exe || echo "PortAudio编译失败"
+      shell: bash
 
     - name: 构建应用
       run: |
@@ -151,12 +221,29 @@ jobs:
         # 针对Windows的特殊构建设置
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           # Windows特殊构建标志
-          echo "Windows环境构建: 设置静态链接opus和portaudio库"
+          echo "========== Windows环境构建 =========="
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          echo "CGO_CFLAGS=$CGO_CFLAGS"
+          echo "CGO_LDFLAGS=$CGO_LDFLAGS"
+          
           # 显示pkg-config信息
-          pkg-config --libs --cflags opus || true
-          pkg-config --libs --cflags portaudio-2.0 || true
-          # 尝试使用详细输出并静态链接库
-          go build -v -x -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" -tags=static ./cmd/client
+          echo "========== pkg-config信息 =========="
+          pkg-config --libs --cflags opus || echo "opus pkg-config失败"
+          pkg-config --libs --cflags portaudio-2.0 || echo "portaudio pkg-config失败"
+          
+          # 尝试使用我们的批处理文件进行构建，如果失败则回退到标准方法
+          echo "========== 尝试使用批处理文件构建 =========="
+          if .github/windows-build.bat ${{ matrix.output_name }} ${VERSION}; then
+            echo "批处理构建成功！"
+          else
+            echo "批处理构建失败，尝试标准构建方法..."
+            # 启用最详细的调试输出
+            echo "========== 开始标准构建 =========="
+            go build -v -x -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client 2>&1 | tee build_log.txt
+            
+            echo "========== 查看构建错误 =========="
+            cat build_log.txt | grep -i error || echo "没有找到明显错误"
+          fi
         # 针对macOS的特殊构建设置
         elif [[ "$RUNNER_OS" == "macOS" ]]; then
           # 尝试使用特定标志构建
@@ -190,6 +277,17 @@ jobs:
           ${{ matrix.asset_name }}.zip
         if-no-files-found: warn
         retention-days: 5
+
+    - name: 上传Windows构建日志 (如果失败)
+      if: failure() && matrix.os == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build-logs
+        path: |
+          build_log.txt
+          go.mod
+          go.sum
+        if-no-files-found: warn
 
   release:
     name: 创建发布
