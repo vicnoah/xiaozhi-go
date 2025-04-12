@@ -333,9 +333,10 @@ jobs:
           
           # 使用cmd脚本进行Windows构建
           echo "========== 使用CMD脚本构建 =========="
-          # 准备版本号
+          # 准备版本号和输出文件名
           echo "$VERSION" > version.txt
           VERSION_VALUE=$(cat version.txt)
+          OUTPUT_NAME="${{ matrix.output_name }}"
           
           cat > windows_build.cmd << EOL
 set CGO_ENABLED=1
@@ -343,19 +344,20 @@ set CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus
 set CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm
 set PATH=C:/msys64/mingw64/bin;%PATH%
 set VERSION=${VERSION_VALUE}
+set OUTPUT_NAME=${OUTPUT_NAME}
 
 echo ========== 尝试直接构建 ==========
-go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=%VERSION%" ./cmd/client
+go build -v -o %OUTPUT_NAME% -ldflags "-X main.Version=%VERSION%" ./cmd/client
 if %ERRORLEVEL% NEQ 0 (
   echo 标准构建失败，尝试nogui标记
-  go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=%VERSION%" -tags=nogui ./cmd/client
+  go build -v -o %OUTPUT_NAME% -ldflags "-X main.Version=%VERSION%" -tags=nogui ./cmd/client
 )
-if not exist ${{ matrix.output_name }} (
+if not exist %OUTPUT_NAME% (
   echo nogui构建失败，尝试static标记
-  go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=%VERSION%" -tags=static ./cmd/client
+  go build -v -o %OUTPUT_NAME% -ldflags "-X main.Version=%VERSION%" -tags=static ./cmd/client
 )
-if exist ${{ matrix.output_name }} (
-  echo 构建成功：${{ matrix.output_name }}
+if exist %OUTPUT_NAME% (
+  echo 构建成功：%OUTPUT_NAME%
   exit /b 0
 ) else (
   echo 所有构建方法都失败
@@ -368,34 +370,37 @@ EOL
           if [ ! -f "${{ matrix.output_name }}" ]; then
             echo "CMD脚本构建失败，尝试PowerShell脚本..."
             
-            # 准备版本号变量
+            # 准备版本号变量和输出文件名
             echo "$VERSION" > version.txt
             VERSION_VALUE=$(cat version.txt)
+            OUTPUT_NAME="${{ matrix.output_name }}"
             
             cat > windows_build.ps1 << EOL
 \$env:CGO_ENABLED = '1'
 \$env:CGO_CFLAGS = '-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus'
 \$env:CGO_LDFLAGS = '-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm'
 \$env:PATH = 'C:/msys64/mingw64/bin;' + \$env:PATH
+\$outputName = '${OUTPUT_NAME}'
+\$version = '${VERSION_VALUE}'
 
 Write-Host '========== 尝试PowerShell构建 =========='
 try {
-  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION_VALUE' ./cmd/client
-  if (Test-Path '${{ matrix.output_name }}') {
+  & go build -v -o \$outputName -ldflags "-X main.Version=\$version" ./cmd/client
+  if (Test-Path \$outputName) {
     Write-Host '构建成功！'
     exit 0
   }
   
   Write-Host '尝试nogui标记'
-  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION_VALUE' -tags=nogui ./cmd/client
-  if (Test-Path '${{ matrix.output_name }}') {
+  & go build -v -o \$outputName -ldflags "-X main.Version=\$version" -tags=nogui ./cmd/client
+  if (Test-Path \$outputName) {
     Write-Host 'nogui构建成功！'
     exit 0
   }
   
   Write-Host '尝试static标记'
-  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION_VALUE' -tags=static ./cmd/client
-  if (Test-Path '${{ matrix.output_name }}') {
+  & go build -v -o \$outputName -ldflags "-X main.Version=\$version" -tags=static ./cmd/client
+  if (Test-Path \$outputName) {
     Write-Host 'static构建成功！'
     exit 0
   }
