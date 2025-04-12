@@ -2,6 +2,7 @@
 
 [![Go版本](https://img.shields.io/badge/Go-1.20+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![许可证](https://img.shields.io/badge/许可证-MIT-green)](LICENSE)
+[![构建状态](https://img.shields.io/github/actions/workflow/status/JustaCai/xiaozhi-go/build.yml?branch=main)](https://github.com/JustaCai/xiaozhi-go/actions/workflows/build.yml)
 
 小知(Xiaozhi)是一个基于WebSocket协议的智能语音助手客户端，支持实时语音识别、对话和物联网控制功能。
 
@@ -23,6 +24,12 @@
 - 有效的服务端接口和认证令牌
 
 ### 安装
+
+#### 方法1：下载预编译版本
+
+您可以从[GitHub Releases](https://github.com/JustaCai/xiaozhi-go/releases)页面下载适合您操作系统的预编译版本。
+
+#### 方法2：从源码构建
 
 1. 克隆代码库：
 
@@ -73,6 +80,25 @@ make activate SERVER_URL=wss://your-server.com TOKEN=your-token
 | `-board` | 设备板型号 | generic |
 | `-activate-only` | 仅执行激活流程 | false |
 
+## 自动构建
+
+本项目使用GitHub Actions进行持续集成和自动构建。每当代码推送到主分支或创建新标签时，都会自动触发构建流程，为Windows、macOS和Linux平台生成可执行文件。
+
+### 发布流程
+
+1. 创建新版本标签（例如`v1.0.1`）
+2. 推送标签到GitHub
+3. GitHub Actions将自动构建所有平台版本
+4. 构建完成后，发布包将自动上传到GitHub Releases页面
+
+### 手动触发构建
+
+您也可以在GitHub仓库的Actions页面手动触发构建流程：
+
+1. 导航到仓库的"Actions"标签页
+2. 选择"构建跨平台应用"工作流
+3. 点击"Run workflow"按钮
+4. 选择分支并确认启动构建
 
 ## 项目结构
 

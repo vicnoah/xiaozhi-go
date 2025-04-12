@@ -5,6 +5,14 @@
 *.so
 *.dylib
 xiaozhi-client
+xiaozhi-client-*
+client
+
+# 压缩包
+*.zip
+*.tar.gz
+*.tar
+*.gz
 
 # 测试文件
 *.test
@@ -39,6 +47,7 @@ temp/
 # 二进制输出目录
 bin/
 build/
+dist/
 
 # 覆盖率报告
 coverage.txt
