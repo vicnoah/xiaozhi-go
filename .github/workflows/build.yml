@@ -76,13 +76,13 @@ jobs:
         # 手动创建opus.pc文件(如果pkg-config找不到)
         mkdir -p $HOME/pkgconfig
         if ! pkg-config --exists opus; then
-          cat > $HOME/pkgconfig/opus.pc << EOF
+          cat > $HOME/pkgconfig/opus.pc << 'EOFX'
 Name: opus
 Description: Opus IETF audio codec
 Version: 1.3.1
 Libs: -L$(brew --prefix)/lib -lopus
 Cflags: -I$(brew --prefix)/include/opus
-EOF
+EOFX
           echo "PKG_CONFIG_PATH=$HOME/pkgconfig:$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         fi
         
