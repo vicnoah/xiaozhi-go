@@ -333,20 +333,26 @@ jobs:
           
           # 使用cmd脚本进行Windows构建
           echo "========== 使用CMD脚本构建 =========="
-          CMD_SCRIPT="set CGO_ENABLED=1
+          # 准备版本号
+          echo "$VERSION" > version.txt
+          VERSION_VALUE=$(cat version.txt)
+          
+          cat > windows_build.cmd << EOL
+set CGO_ENABLED=1
 set CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus
 set CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm
 set PATH=C:/msys64/mingw64/bin;%PATH%
+set VERSION=${VERSION_VALUE}
 
 echo ========== 尝试直接构建 ==========
-go build -v -o ${{ matrix.output_name }} -ldflags \"-X main.Version=$VERSION\" ./cmd/client
+go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=%VERSION%" ./cmd/client
 if %ERRORLEVEL% NEQ 0 (
   echo 标准构建失败，尝试nogui标记
-  go build -v -o ${{ matrix.output_name }} -ldflags \"-X main.Version=$VERSION\" -tags=nogui ./cmd/client
+  go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=%VERSION%" -tags=nogui ./cmd/client
 )
 if not exist ${{ matrix.output_name }} (
   echo nogui构建失败，尝试static标记
-  go build -v -o ${{ matrix.output_name }} -ldflags \"-X main.Version=$VERSION\" -tags=static ./cmd/client
+  go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=%VERSION%" -tags=static ./cmd/client
 )
 if exist ${{ matrix.output_name }} (
   echo 构建成功：${{ matrix.output_name }}
@@ -355,15 +361,18 @@ if exist ${{ matrix.output_name }} (
   echo 所有构建方法都失败
   exit /b 1
 )
-"
-          echo "$CMD_SCRIPT" > windows_build.cmd
+EOL
           cmd /c "windows_build.cmd" 2>&1 | tee build_log.txt
           
           # 检查是否构建成功
           if [ ! -f "${{ matrix.output_name }}" ]; then
             echo "CMD脚本构建失败，尝试PowerShell脚本..."
             
-            POWERSHELL_SCRIPT="
+            # 准备版本号变量
+            echo "$VERSION" > version.txt
+            VERSION_VALUE=$(cat version.txt)
+            
+            cat > windows_build.ps1 << EOL
 \$env:CGO_ENABLED = '1'
 \$env:CGO_CFLAGS = '-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus'
 \$env:CGO_LDFLAGS = '-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm'
@@ -371,21 +380,21 @@ if exist ${{ matrix.output_name }} (
 
 Write-Host '========== 尝试PowerShell构建 =========='
 try {
-  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION' ./cmd/client
+  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION_VALUE' ./cmd/client
   if (Test-Path '${{ matrix.output_name }}') {
     Write-Host '构建成功！'
     exit 0
   }
   
   Write-Host '尝试nogui标记'
-  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION' -tags=nogui ./cmd/client
+  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION_VALUE' -tags=nogui ./cmd/client
   if (Test-Path '${{ matrix.output_name }}') {
     Write-Host 'nogui构建成功！'
     exit 0
   }
   
   Write-Host '尝试static标记'
-  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION' -tags=static ./cmd/client
+  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION_VALUE' -tags=static ./cmd/client
   if (Test-Path '${{ matrix.output_name }}') {
     Write-Host 'static构建成功！'
     exit 0
@@ -397,8 +406,7 @@ try {
   Write-Host \$_.Exception.Message
   exit 1
 }
-"
-            echo "$POWERSHELL_SCRIPT" > windows_build.ps1
+EOL
             powershell -ExecutionPolicy Bypass -File windows_build.ps1 2>&1 | tee -a build_log.txt
           fi
           
