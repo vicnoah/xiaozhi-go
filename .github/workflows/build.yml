@@ -41,24 +41,44 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y portaudio19-dev libasound2-dev
+        sudo apt-get install -y portaudio19-dev libasound2-dev libopus-dev pkg-config
+        # 验证opus库是否可用
+        pkg-config --libs --cflags opus || true
+        # 输出安装的库信息
+        dpkg -l | grep opus
+      env:
+        DEBIAN_FRONTEND: noninteractive
 
     - name: 安装依赖 (macOS)
       if: matrix.os == 'macos-latest'
       run: |
         brew install portaudio
+        brew install opus
+        brew install pkg-config
+        # 设置PKG_CONFIG_PATH确保能找到opus
+        echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        # 验证opus库是否可用
+        pkg-config --libs --cflags opus || true
+        # 显示库位置
+        brew list opus || true
 
     - name: 安装依赖 (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        # 使用MSYS2安装PortAudio
+        # 使用MSYS2安装PortAudio和Opus
         choco install -y msys2
         choco install -y mingw
-        C:\msys64\usr\bin\bash -lc "pacman --noconfirm -S mingw-w64-x86_64-portaudio mingw-w64-x86_64-pkg-config"
+        C:\msys64\usr\bin\bash -lc "pacman --noconfirm -S mingw-w64-x86_64-portaudio mingw-w64-x86_64-pkg-config mingw-w64-x86_64-opus"
         
-        # 设置CGO环境变量
+        # 设置CGO环境变量和路径
         echo "CGO_ENABLED=1" >> $GITHUB_ENV
         echo "C:/msys64/mingw64/bin" >> $GITHUB_PATH
+        echo "PKG_CONFIG_PATH=C:/msys64/mingw64/lib/pkgconfig" >> $GITHUB_ENV
+        
+        # 验证opus库是否可用
+        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opus || true"
+        # 列出已安装的包
+        C:\msys64\usr\bin\bash -lc "pacman -Q | grep opus"
 
     - name: 获取依赖
       run: go mod tidy
@@ -72,6 +92,9 @@ jobs:
         
         # 设置CGO_ENABLED环境变量
         export CGO_ENABLED=1
+        
+        # 调试输出Go环境
+        go env
         
         # 构建应用
         go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
