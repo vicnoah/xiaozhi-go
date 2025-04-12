@@ -76,19 +76,21 @@ jobs:
         # 手动创建opus.pc文件(如果pkg-config找不到)
         mkdir -p $HOME/pkgconfig
         if ! pkg-config --exists opus; then
-          cat > $HOME/pkgconfig/opus.pc << 'EOFX'
-Name: opus
-Description: Opus IETF audio codec
-Version: 1.3.1
-Libs: -L$(brew --prefix)/lib -lopus
-Cflags: -I$(brew --prefix)/include/opus
-EOFX
+          BREW_PREFIX=$(brew --prefix)
+          cat > $HOME/pkgconfig/opus.pc << EOF
+        Name: opus
+        Description: Opus IETF audio codec
+        Version: 1.3.1
+        Libs: -L${BREW_PREFIX}/lib -lopus
+        Cflags: -I${BREW_PREFIX}/include/opus
+        EOF
           echo "PKG_CONFIG_PATH=$HOME/pkgconfig:$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         fi
         
         # 尝试直接指定opus头文件和库文件位置
-        echo "CGO_CFLAGS=-I$(brew --prefix)/include -I$(brew --prefix)/include/opus" >> $GITHUB_ENV
-        echo "CGO_LDFLAGS=-L$(brew --prefix)/lib -lopus" >> $GITHUB_ENV
+        BREW_PREFIX=$(brew --prefix)
+        echo "CGO_CFLAGS=-I${BREW_PREFIX}/include -I${BREW_PREFIX}/include/opus" >> $GITHUB_ENV
+        echo "CGO_LDFLAGS=-L${BREW_PREFIX}/lib -lopus" >> $GITHUB_ENV
 
     - name: 安装依赖 (Windows)
       if: matrix.os == 'windows-latest'
