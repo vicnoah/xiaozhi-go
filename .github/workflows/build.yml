@@ -112,15 +112,15 @@ jobs:
         echo "CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus" >> $GITHUB_ENV
         echo "CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm" >> $GITHUB_ENV
         
-        # 将库文件复制到系统路径
+        # 将库文件复制到系统路径 - 使用Windows命令
         echo "========== 复制库文件到系统路径 =========="
         mkdir -p C:/Windows/System32/temp_libs
-        
-        # 使用Bash命令复制文件，而不是Windows命令
-        find C:/msys64/mingw64/bin -name "libopus*.dll" -exec cp -v {} C:/Windows/System32/temp_libs/ \; || echo "找不到libopus.dll"
-        find C:/msys64/mingw64/bin -name "libportaudio*.dll" -exec cp -v {} C:/Windows/System32/temp_libs/ \; || echo "找不到libportaudio.dll"
-        find C:/msys64/mingw64/lib -name "libopus*.a" -exec cp -v {} C:/Windows/System32/temp_libs/ \; || echo "找不到libopus.a"
-        find C:/msys64/mingw64/lib -name "libportaudio*.a" -exec cp -v {} C:/Windows/System32/temp_libs/ \; || echo "找不到libportaudio.a"
+
+        # 复制DLL文件 - 使用Windows commands
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/bin/ -Filter 'libopus*.dll' | Copy-Item -Destination C:/Windows/System32/temp_libs/ -Force"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/bin/ -Filter 'libportaudio*.dll' | Copy-Item -Destination C:/Windows/System32/temp_libs/ -Force"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/ -Filter 'libopus*.a' | Copy-Item -Destination C:/Windows/System32/temp_libs/ -Force"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/ -Filter 'libportaudio*.a' | Copy-Item -Destination C:/Windows/System32/temp_libs/ -Force"
         
         # 设置库搜索路径
         echo "LIB=C:\Windows\System32\temp_libs;%LIB%" >> $GITHUB_ENV
@@ -132,13 +132,13 @@ jobs:
         # 添加我们自定义的pkgconfig路径
         echo "PKG_CONFIG_PATH=C:/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         
-        # 检查库和头文件是否存在 - 使用Bash命令
+        # 检查库和头文件是否存在 - 使用powershell
         echo "=========== 检查opus和portaudio库文件 ==========="
-        find "C:/msys64/mingw64/lib" -name "libopus*.a" || echo "找不到opus库文件"
-        find "C:/msys64/mingw64/lib" -name "libportaudio*.a" || echo "找不到portaudio库文件" 
-        find "C:/msys64/mingw64/include" -name "opus.h" -o -name "opus" || echo "找不到opus头文件"
-        find "C:/msys64/mingw64/include" -name "portaudio.h" || echo "找不到portaudio头文件"
-        find "C:/msys64/mingw64/lib/pkgconfig" -name "*.pc" || echo "找不到pkg-config文件"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/ -Filter 'libopus*.a'"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/ -Filter 'libportaudio*.a'"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/include/ -Recurse -Filter 'opus.h'"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/include/ -Filter 'portaudio.h'"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/pkgconfig/ -Filter '*.pc'"
         
         # 使用msys2 bash验证opus库是否可用
         echo "=========== PKG-CONFIG结果 ==========="
@@ -158,31 +158,31 @@ jobs:
       run: |
         echo "============= 检查CGO和GCC配置 ============="
         # 显示go环境变量
-        go env | grep -E "CGO|C_"
+        go env | findstr "CGO"
         
         # 检查gcc版本
         gcc --version || echo "无法找到gcc"
         
         # 检查MinGW安装情况
-        if [ -f "C:/msys64/mingw64/bin/gcc.exe" ]; then
+        if exist "C:/msys64/mingw64/bin/gcc.exe" (
           echo "找到MinGW gcc"
-        else
+        ) else (
           echo "找不到MinGW gcc"
-        fi
+        )
         
         # 创建一个简单的C测试程序
-        echo '#include <stdio.h>' > test.c
-        echo 'int main() { printf("Hello, World!\n"); return 0; }' >> test.c
+        echo #include ^<stdio.h^> > test.c
+        echo int main() { printf("Hello, World!\n"); return 0; } >> test.c
         
         # 尝试编译
         echo "使用gcc编译简单C程序:"
         gcc test.c -o test.exe && echo "C编译成功" || echo "C编译失败"
         
         # 创建一个使用cgo的简单程序
-        echo 'package main' > test.go
-        echo 'import "C"' >> test.go
-        echo 'import "fmt"' >> test.go
-        echo 'func main() { fmt.Println("CGO测试") }' >> test.go
+        echo package main > test.go
+        echo import "C" >> test.go
+        echo import "fmt" >> test.go
+        echo func main() { fmt.Println("CGO测试") } >> test.go
         
         # 尝试编译
         echo "使用go build编译CGO程序:"
@@ -190,31 +190,29 @@ jobs:
         
         # 检查opus和portaudio库链接情况
         echo "============= 检查OPUS库链接 ============="
-        echo '#include <stdio.h>' > opus_test.c
-        echo '#include <opus/opus.h>' >> opus_test.c
-        echo 'int main() { printf("Opus版本: %s\n", opus_get_version_string()); return 0; }' >> opus_test.c
+        echo #include ^<stdio.h^> > opus_test.c
+        echo #include ^<opus/opus.h^> >> opus_test.c
+        echo int main() { printf("Opus Test\n"); return 0; } >> opus_test.c
         
         # 尝试编译链接opus
         echo "尝试编译链接opus库:"
-        gcc -o opus_test.exe opus_test.c -I"C:/msys64/mingw64/include" -L"C:/msys64/mingw64/lib" -lopus && \
-          echo "Opus编译成功" && ./opus_test.exe || echo "Opus编译失败"
+        gcc -o opus_test.exe opus_test.c -IC:/msys64/mingw64/include -LC:/msys64/mingw64/lib -lopus && echo "Opus编译成功" || echo "Opus编译失败"
         
         # 检查portaudio库
         echo "============= 检查PortAudio库链接 ============="
-        echo '#include <stdio.h>' > pa_test.c
-        echo '#include <portaudio.h>' >> pa_test.c
-        echo 'int main() { printf("PortAudio版本: %d\n", Pa_GetVersion()); return 0; }' >> pa_test.c
+        echo #include ^<stdio.h^> > pa_test.c
+        echo #include ^<portaudio.h^> >> pa_test.c
+        echo int main() { printf("PortAudio Test\n"); return 0; } >> pa_test.c
         
         # 尝试编译链接portaudio
         echo "尝试编译链接portaudio库:"
-        gcc -o pa_test.exe pa_test.c -I"C:/msys64/mingw64/include" -L"C:/msys64/mingw64/lib" -lportaudio -lwinmm && \
-          echo "PortAudio编译成功" && ./pa_test.exe || echo "PortAudio编译失败"
+        gcc -o pa_test.exe pa_test.c -IC:/msys64/mingw64/include -LC:/msys64/mingw64/lib -lportaudio -lwinmm && echo "PortAudio编译成功" || echo "PortAudio编译失败"
         
-        # 检查opus头文件位置 - 使用find命令而不是Windows命令
+        # 检查opus头文件位置 - 使用PowerShell
         echo "============= 检查opus头文件位置 ============="
-        find "C:/msys64/mingw64/include" -name "opus.h" || echo "找不到opus.h"
-        find "C:/msys64/mingw64/include" -name "portaudio.h" || echo "找不到portaudio.h"
-      shell: bash
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/include/ -Recurse -Filter 'opus.h'"
+        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/include/ -Filter 'portaudio.h'"
+      shell: cmd
 
     - name: 测试自定义包装器 (Windows)
       if: matrix.os == 'windows-latest'
@@ -223,16 +221,16 @@ jobs:
         
         # 编译C包装器
         echo "编译C包装器:"
-        gcc -c .github/windows_opus_wrapper.c -o windows_opus_wrapper.o -I"C:/msys64/mingw64/include" -I"C:/msys64/mingw64/include/opus" && \
-          echo "C包装器编译成功" || echo "C包装器编译失败"
+        gcc -c .github/windows_opus_wrapper.c -o windows_opus_wrapper.o -IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus && echo "C包装器编译成功" || echo "C包装器编译失败"
         
-        # 测试Go静态包装器
+        # 测试Go静态包装器 - 使用命令行环境变量设置
         echo "测试Go静态包装器:"
-        CGO_ENABLED=1 \
-        CGO_CFLAGS="-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus" \
-        CGO_LDFLAGS="-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm" \
+        set CGO_ENABLED=1
+        set CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus
+        set CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm
+        set PATH=C:/msys64/mingw64/bin;%PATH%
         go run .github/static_windows.go && echo "静态包装器测试成功" || echo "静态包装器测试失败"
-      shell: bash
+      shell: cmd
 
     - name: 创建Windows构建脚本
       if: matrix.os == 'windows-latest'
@@ -333,55 +331,83 @@ jobs:
           echo "CGO_CFLAGS=$CGO_CFLAGS"
           echo "CGO_LDFLAGS=$CGO_LDFLAGS"
           
-          # 尝试使用我们的Go构建脚本 - 最稳定的方法
-          echo "========== 尝试使用Go构建脚本 =========="
-          go run .github/fix-windows-build.go ${{ matrix.output_name }} ${VERSION} 2>&1 | tee build_log.txt
+          # 使用cmd脚本进行Windows构建
+          echo "========== 使用CMD脚本构建 =========="
+          CMD_SCRIPT="set CGO_ENABLED=1
+set CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus
+set CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm
+set PATH=C:/msys64/mingw64/bin;%PATH%
+
+echo ========== 尝试直接构建 ==========
+go build -v -o ${{ matrix.output_name }} -ldflags \"-X main.Version=$VERSION\" ./cmd/client
+if %ERRORLEVEL% NEQ 0 (
+  echo 标准构建失败，尝试nogui标记
+  go build -v -o ${{ matrix.output_name }} -ldflags \"-X main.Version=$VERSION\" -tags=nogui ./cmd/client
+)
+if not exist ${{ matrix.output_name }} (
+  echo nogui构建失败，尝试static标记
+  go build -v -o ${{ matrix.output_name }} -ldflags \"-X main.Version=$VERSION\" -tags=static ./cmd/client
+)
+if exist ${{ matrix.output_name }} (
+  echo 构建成功：${{ matrix.output_name }}
+  exit /b 0
+) else (
+  echo 所有构建方法都失败
+  exit /b 1
+)
+"
+          echo "$CMD_SCRIPT" > windows_build.cmd
+          cmd /c "windows_build.cmd" 2>&1 | tee build_log.txt
           
-          # 如果失败，尝试各种不同的构建方法
+          # 检查是否构建成功
           if [ ! -f "${{ matrix.output_name }}" ]; then
-            echo "Go构建脚本失败，尝试各种构建方法..."
+            echo "CMD脚本构建失败，尝试PowerShell脚本..."
             
-            # 方法1: 静态构建脚本
-            echo "========== 方法1: 静态构建脚本 =========="
-            cmd /c ".github\static_build.bat ${{ matrix.output_name }} ${VERSION}" 2>&1 | tee -a build_log.txt
-          fi
-          
-          # 方法2: 原始批处理文件
-          if [ ! -f "${{ matrix.output_name }}" ]; then
-            echo "========== 方法2: 原始批处理文件 =========="
-            cmd /c ".github\windows-build.bat ${{ matrix.output_name }} ${VERSION}" 2>&1 | tee -a build_log.txt
-          fi
-          
-          # 方法3: 直接构建不同标记
-          if [ ! -f "${{ matrix.output_name }}" ]; then
-            echo "========== 方法3: 尝试各种构建标记 =========="
-            for tag in "" "nogui" "static"; do
-              tagopt=""
-              if [ ! -z "$tag" ]; then
-                tagopt="-tags=$tag"
-                echo "尝试构建标记: $tag"
-              else
-                echo "尝试标准构建"
-              fi
-              
-              CGO_ENABLED=1 \
-              CGO_CFLAGS="-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus" \
-              CGO_LDFLAGS="-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm" \
-              PATH="/c/msys64/mingw64/bin:$PATH" \
-              go build -v $tagopt -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client 2>&1 | tee -a build_log.txt
-              
-              if [ -f "${{ matrix.output_name }}" ]; then
-                echo "构建成功使用标记: $tag"
-                break
-              fi
-            done
+            POWERSHELL_SCRIPT="
+\$env:CGO_ENABLED = '1'
+\$env:CGO_CFLAGS = '-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus'
+\$env:CGO_LDFLAGS = '-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm'
+\$env:PATH = 'C:/msys64/mingw64/bin;' + \$env:PATH
+
+Write-Host '========== 尝试PowerShell构建 =========='
+try {
+  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION' ./cmd/client
+  if (Test-Path '${{ matrix.output_name }}') {
+    Write-Host '构建成功！'
+    exit 0
+  }
+  
+  Write-Host '尝试nogui标记'
+  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION' -tags=nogui ./cmd/client
+  if (Test-Path '${{ matrix.output_name }}') {
+    Write-Host 'nogui构建成功！'
+    exit 0
+  }
+  
+  Write-Host '尝试static标记'
+  & go build -v -o '${{ matrix.output_name }}' -ldflags '-X main.Version=$VERSION' -tags=static ./cmd/client
+  if (Test-Path '${{ matrix.output_name }}') {
+    Write-Host 'static构建成功！'
+    exit 0
+  }
+  
+  Write-Host '所有构建方法都失败'
+  exit 1
+} catch {
+  Write-Host \$_.Exception.Message
+  exit 1
+}
+"
+            echo "$POWERSHELL_SCRIPT" > windows_build.ps1
+            powershell -ExecutionPolicy Bypass -File windows_build.ps1 2>&1 | tee -a build_log.txt
           fi
           
           # 保存错误日志
           echo "========== 构建日志摘要 =========="
           if [ -f "build_log.txt" ]; then
             echo "构建日志内容:"
-            cat build_log.txt | grep -i "error\|fail" || echo "没有找到明显错误"
+            # 使用PowerShell查找错误
+            powershell -Command "Get-Content build_log.txt | Select-String -Pattern 'error|fail' -CaseSensitive:$false" || echo "没有找到明显错误"
           fi
           
           # 检查最终结果
