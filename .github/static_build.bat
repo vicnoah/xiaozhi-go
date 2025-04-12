@@ -20,6 +20,16 @@ set CGO_CFLAGS=-I%MINGW_PATH%\include -I%MINGW_PATH%\include\opus
 set CGO_LDFLAGS=-L%MINGW_PATH%\lib -lopus -lportaudio -lwinmm -static
 set PATH=%MINGW_PATH%\bin;%PATH%
 
+REM 检查MinGW环境
+echo ======= 检查MinGW环境 =======
+if exist "%MINGW_PATH%\bin\gcc.exe" (
+    echo MinGW GCC存在: 
+    "%MINGW_PATH%\bin\gcc.exe" --version
+) else (
+    echo MinGW GCC不存在，构建可能会失败
+    exit /b 1
+)
+
 REM 创建临时目录
 mkdir tmp_build 2>nul
 cd tmp_build

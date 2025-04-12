@@ -115,10 +115,12 @@ jobs:
         # 将库文件复制到系统路径
         echo "========== 复制库文件到系统路径 =========="
         mkdir -p C:/Windows/System32/temp_libs
-        cp -v C:/msys64/mingw64/bin/libopus*.dll C:/Windows/System32/temp_libs/ || echo "找不到libopus.dll"
-        cp -v C:/msys64/mingw64/bin/libportaudio*.dll C:/Windows/System32/temp_libs/ || echo "找不到libportaudio.dll"
-        cp -v C:/msys64/mingw64/lib/libopus*.a C:/Windows/System32/temp_libs/ || echo "找不到libopus.a"
-        cp -v C:/msys64/mingw64/lib/libportaudio*.a C:/Windows/System32/temp_libs/ || echo "找不到libportaudio.a"
+        
+        # 使用Bash命令复制文件，而不是Windows命令
+        find C:/msys64/mingw64/bin -name "libopus*.dll" -exec cp -v {} C:/Windows/System32/temp_libs/ \; || echo "找不到libopus.dll"
+        find C:/msys64/mingw64/bin -name "libportaudio*.dll" -exec cp -v {} C:/Windows/System32/temp_libs/ \; || echo "找不到libportaudio.dll"
+        find C:/msys64/mingw64/lib -name "libopus*.a" -exec cp -v {} C:/Windows/System32/temp_libs/ \; || echo "找不到libopus.a"
+        find C:/msys64/mingw64/lib -name "libportaudio*.a" -exec cp -v {} C:/Windows/System32/temp_libs/ \; || echo "找不到libportaudio.a"
         
         # 设置库搜索路径
         echo "LIB=C:\Windows\System32\temp_libs;%LIB%" >> $GITHUB_ENV
@@ -130,13 +132,13 @@ jobs:
         # 添加我们自定义的pkgconfig路径
         echo "PKG_CONFIG_PATH=C:/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         
-        # 检查库和头文件是否存在
+        # 检查库和头文件是否存在 - 使用Bash命令
         echo "=========== 检查opus和portaudio库文件 ==========="
-        dir "C:\msys64\mingw64\lib\*.a" | findstr opus
-        dir "C:\msys64\mingw64\lib\*.a" | findstr portaudio
-        dir "C:\msys64\mingw64\include" /s /b | findstr opus
-        dir "C:\msys64\mingw64\include" /s /b | findstr portaudio
-        dir "C:\msys64\mingw64\lib\pkgconfig" /b
+        find "C:/msys64/mingw64/lib" -name "libopus*.a" || echo "找不到opus库文件"
+        find "C:/msys64/mingw64/lib" -name "libportaudio*.a" || echo "找不到portaudio库文件" 
+        find "C:/msys64/mingw64/include" -name "opus.h" -o -name "opus" || echo "找不到opus头文件"
+        find "C:/msys64/mingw64/include" -name "portaudio.h" || echo "找不到portaudio头文件"
+        find "C:/msys64/mingw64/lib/pkgconfig" -name "*.pc" || echo "找不到pkg-config文件"
         
         # 使用msys2 bash验证opus库是否可用
         echo "=========== PKG-CONFIG结果 ==========="
@@ -208,7 +210,7 @@ jobs:
         gcc -o pa_test.exe pa_test.c -I"C:/msys64/mingw64/include" -L"C:/msys64/mingw64/lib" -lportaudio -lwinmm && \
           echo "PortAudio编译成功" && ./pa_test.exe || echo "PortAudio编译失败"
         
-        # 检查opus头文件位置
+        # 检查opus头文件位置 - 使用find命令而不是Windows命令
         echo "============= 检查opus头文件位置 ============="
         find "C:/msys64/mingw64/include" -name "opus.h" || echo "找不到opus.h"
         find "C:/msys64/mingw64/include" -name "portaudio.h" || echo "找不到portaudio.h"
@@ -331,57 +333,54 @@ jobs:
           echo "CGO_CFLAGS=$CGO_CFLAGS"
           echo "CGO_LDFLAGS=$CGO_LDFLAGS"
           
-          # 显示pkg-config信息
-          echo "========== pkg-config信息 =========="
-          pkg-config --libs --cflags opus || echo "opus pkg-config失败"
-          pkg-config --libs --cflags portaudio-2.0 || echo "portaudio pkg-config失败"
+          # 尝试使用我们的Go构建脚本 - 最稳定的方法
+          echo "========== 尝试使用Go构建脚本 =========="
+          go run .github/fix-windows-build.go ${{ matrix.output_name }} ${VERSION} 2>&1 | tee build_log.txt
           
-          # 优先尝试静态构建脚本
-          echo "========== 尝试静态构建脚本 =========="
-          .github/static_build.bat ${{ matrix.output_name }} ${VERSION} 2>&1 | tee build_log.txt
-          
-          # 如果失败，尝试Go构建脚本
+          # 如果失败，尝试各种不同的构建方法
           if [ ! -f "${{ matrix.output_name }}" ]; then
-            echo "静态构建失败，尝试Go构建脚本..."
-            go run build_windows.go ${{ matrix.output_name }} ${VERSION} 2>&1 | tee -a build_log.txt
+            echo "Go构建脚本失败，尝试各种构建方法..."
+            
+            # 方法1: 静态构建脚本
+            echo "========== 方法1: 静态构建脚本 =========="
+            cmd /c ".github\static_build.bat ${{ matrix.output_name }} ${VERSION}" 2>&1 | tee -a build_log.txt
           fi
           
-          # 如果仍然失败，尝试批处理文件
+          # 方法2: 原始批处理文件
           if [ ! -f "${{ matrix.output_name }}" ]; then
-            echo "Go构建脚本失败，尝试批处理构建..."
-            .github/windows-build.bat ${{ matrix.output_name }} ${VERSION} 2>&1 | tee -a build_log.txt
+            echo "========== 方法2: 原始批处理文件 =========="
+            cmd /c ".github\windows-build.bat ${{ matrix.output_name }} ${VERSION}" 2>&1 | tee -a build_log.txt
           fi
           
-          # 如果所有方法都失败，尝试最基本的构建
+          # 方法3: 直接构建不同标记
           if [ ! -f "${{ matrix.output_name }}" ]; then
-            echo "所有构建方法失败，尝试最后的构建方法..."
-            
-            # 尝试不同的标签组合
-            echo "========== 尝试nogui标签 =========="
-            go build -v -o ${{ matrix.output_name }} -tags=nogui -ldflags "-X main.Version=${VERSION}" ./cmd/client 2>&1 | tee -a build_log.txt
-            
-            if [ ! -f "${{ matrix.output_name }}" ]; then
-              echo "========== 尝试static标签 =========="
-              go build -v -o ${{ matrix.output_name }} -tags=static -ldflags "-X main.Version=${VERSION}" ./cmd/client 2>&1 | tee -a build_log.txt
-            fi
-            
-            if [ ! -f "${{ matrix.output_name }}" ]; then
-              echo "========== 尝试直接设置GCC环境 =========="
+            echo "========== 方法3: 尝试各种构建标记 =========="
+            for tag in "" "nogui" "static"; do
+              tagopt=""
+              if [ ! -z "$tag" ]; then
+                tagopt="-tags=$tag"
+                echo "尝试构建标记: $tag"
+              else
+                echo "尝试标准构建"
+              fi
               
-              # 环境变量再次确认
-              export CGO_ENABLED=1
-              export CGO_CFLAGS="-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus"
-              export CGO_LDFLAGS="-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm"
-              export PATH="/c/msys64/mingw64/bin:$PATH"
+              CGO_ENABLED=1 \
+              CGO_CFLAGS="-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus" \
+              CGO_LDFLAGS="-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm" \
+              PATH="/c/msys64/mingw64/bin:$PATH" \
+              go build -v $tagopt -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client 2>&1 | tee -a build_log.txt
               
-              # 最后一次尝试
-              go build -v -x -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client 2>&1 | tee -a build_log.txt
-            fi
+              if [ -f "${{ matrix.output_name }}" ]; then
+                echo "构建成功使用标记: $tag"
+                break
+              fi
+            done
           fi
           
           # 保存错误日志
           echo "========== 构建日志摘要 =========="
           if [ -f "build_log.txt" ]; then
+            echo "构建日志内容:"
             cat build_log.txt | grep -i "error\|fail" || echo "没有找到明显错误"
           fi
           

@@ -33,14 +33,16 @@ if exist "%MINGW_PATH%\lib\libopus.a" (
     echo libopus.a 存在
 ) else (
     echo libopus.a 不存在！
-    dir "%MINGW_PATH%\lib\*.a" | findstr opus
+    echo 寻找可能的opus库文件:
+    dir "%MINGW_PATH%\lib\*opus*.a"
 )
 
 if exist "%MINGW_PATH%\lib\libportaudio.a" (
     echo libportaudio.a 存在
 ) else (
     echo libportaudio.a 不存在！
-    dir "%MINGW_PATH%\lib\*.a" | findstr portaudio
+    echo 寻找可能的portaudio库文件:
+    dir "%MINGW_PATH%\lib\*portaudio*.a"
 )
 
 REM 检查头文件
@@ -49,6 +51,7 @@ if exist "%MINGW_PATH%\include\opus\opus.h" (
     echo opus.h 存在
 ) else (
     echo opus.h 不存在！
+    echo 寻找可能的opus头文件位置:
     dir "%MINGW_PATH%\include\opus\*.*" 2>nul || echo "opus目录不存在!"
 )
 
@@ -56,7 +59,8 @@ if exist "%MINGW_PATH%\include\portaudio.h" (
     echo portaudio.h 存在
 ) else (
     echo portaudio.h 不存在！
-    dir "%MINGW_PATH%\include\*.h" | findstr audio
+    echo 寻找可能的portaudio头文件:
+    dir "%MINGW_PATH%\include\*.h" 
 )
 
 REM 创建简单C程序测试编译 - 测试opus
