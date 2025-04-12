@@ -92,24 +92,33 @@ jobs:
         echo "CGO_CFLAGS=-I${BREW_PREFIX}/include -I${BREW_PREFIX}/include/opus" >> $GITHUB_ENV
         echo "CGO_LDFLAGS=-L${BREW_PREFIX}/lib -lopus" >> $GITHUB_ENV
 
-    - name: 安装依赖 (Windows)
+    # 为Windows设置MSYS2
+    - name: 设置MSYS2
       if: matrix.os == 'windows-latest'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-portaudio
+          mingw-w64-x86_64-pkg-config
+          mingw-w64-x86_64-opus
+          mingw-w64-x86_64-opusfile
+
+    - name: 为Windows设置环境变量
+      if: matrix.os == 'windows-latest'
+      shell: bash
       run: |
-        # 使用MSYS2安装PortAudio和Opus
-        choco install -y msys2
-        choco install -y mingw
-        C:\msys64\usr\bin\bash -lc "pacman --noconfirm -S mingw-w64-x86_64-portaudio mingw-w64-x86_64-pkg-config mingw-w64-x86_64-opus mingw-w64-x86_64-opusfile"
-        
         # 设置CGO环境变量和路径
         echo "CGO_ENABLED=1" >> $GITHUB_ENV
-        echo "C:/msys64/mingw64/bin" >> $GITHUB_PATH
-        echo "PKG_CONFIG_PATH=C:/msys64/mingw64/lib/pkgconfig" >> $GITHUB_ENV
+        echo "PATH=$PATH:/msys64/mingw64/bin" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=/msys64/mingw64/lib/pkgconfig" >> $GITHUB_ENV
         
         # 验证opus库是否可用
-        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opus || true"
-        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opusfile || true"
-        # 列出已安装的包
-        C:\msys64\usr\bin\bash -lc "pacman -Q | grep opus"
+        export PATH=$PATH:/msys64/mingw64/bin
+        pkg-config --libs --cflags opus || true
+        pkg-config --libs --cflags opusfile || true
 
     - name: 获取依赖
       run: go mod tidy
