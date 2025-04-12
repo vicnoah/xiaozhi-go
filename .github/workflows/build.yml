@@ -61,7 +61,7 @@ jobs:
         echo "C:/msys64/mingw64/bin" >> $GITHUB_PATH
 
     - name: 获取依赖
-      run: go mod download
+      run: go mod tidy
 
     - name: 构建应用
       run: |
@@ -69,8 +69,15 @@ jobs:
         if [ -z "$VERSION" ]; then
           VERSION="dev"
         fi
+        
+        # 设置CGO_ENABLED环境变量
+        export CGO_ENABLED=1
+        
+        # 构建应用
         go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
       shell: bash
+      env:
+        CGO_ENABLED: 1
 
     - name: 压缩构建产物 (Unix-like)
       if: matrix.os != 'windows-latest'
