@@ -41,9 +41,10 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y portaudio19-dev libasound2-dev libopus-dev pkg-config
+        sudo apt-get install -y portaudio19-dev libasound2-dev libopus-dev pkg-config libopusfile-dev
         # 验证opus库是否可用
         pkg-config --libs --cflags opus || true
+        pkg-config --libs --cflags opusfile || true
         # 输出安装的库信息
         dpkg -l | grep opus
       env:
@@ -54,13 +55,40 @@ jobs:
       run: |
         brew install portaudio
         brew install opus
+        brew install opusfile
         brew install pkg-config
-        # 设置PKG_CONFIG_PATH确保能找到opus
+        
+        # 设置PKG_CONFIG_PATH确保能找到opus和opusfile
         echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-        # 验证opus库是否可用
+        
+        # 验证opus和opusfile库是否可用
+        echo "====== Opus库信息 ======"
         pkg-config --libs --cflags opus || true
+        echo "====== OpusFile库信息 ======"
+        pkg-config --libs --cflags opusfile || true
+        
         # 显示库位置
+        echo "====== Opus库位置 ======"
         brew list opus || true
+        echo "====== OpusFile库位置 ======"
+        brew list opusfile || true
+        
+        # 手动创建opus.pc文件(如果pkg-config找不到)
+        mkdir -p $HOME/pkgconfig
+        if ! pkg-config --exists opus; then
+          cat > $HOME/pkgconfig/opus.pc << EOF
+Name: opus
+Description: Opus IETF audio codec
+Version: 1.3.1
+Libs: -L$(brew --prefix)/lib -lopus
+Cflags: -I$(brew --prefix)/include/opus
+EOF
+          echo "PKG_CONFIG_PATH=$HOME/pkgconfig:$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        fi
+        
+        # 尝试直接指定opus头文件和库文件位置
+        echo "CGO_CFLAGS=-I$(brew --prefix)/include -I$(brew --prefix)/include/opus" >> $GITHUB_ENV
+        echo "CGO_LDFLAGS=-L$(brew --prefix)/lib -lopus" >> $GITHUB_ENV
 
     - name: 安装依赖 (Windows)
       if: matrix.os == 'windows-latest'
@@ -68,7 +96,7 @@ jobs:
         # 使用MSYS2安装PortAudio和Opus
         choco install -y msys2
         choco install -y mingw
-        C:\msys64\usr\bin\bash -lc "pacman --noconfirm -S mingw-w64-x86_64-portaudio mingw-w64-x86_64-pkg-config mingw-w64-x86_64-opus"
+        C:\msys64\usr\bin\bash -lc "pacman --noconfirm -S mingw-w64-x86_64-portaudio mingw-w64-x86_64-pkg-config mingw-w64-x86_64-opus mingw-w64-x86_64-opusfile"
         
         # 设置CGO环境变量和路径
         echo "CGO_ENABLED=1" >> $GITHUB_ENV
@@ -77,6 +105,7 @@ jobs:
         
         # 验证opus库是否可用
         C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opus || true"
+        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opusfile || true"
         # 列出已安装的包
         C:\msys64\usr\bin\bash -lc "pacman -Q | grep opus"
 
@@ -96,8 +125,14 @@ jobs:
         # 调试输出Go环境
         go env
         
-        # 构建应用
-        go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
+        # 针对macOS的特殊构建设置
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          # 尝试使用特定标志构建
+          go build -v -x -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" -tags=dynamic ./cmd/client
+        else
+          # 其他平台正常构建
+          go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
+        fi
       shell: bash
       env:
         CGO_ENABLED: 1
