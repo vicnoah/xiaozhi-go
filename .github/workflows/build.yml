@@ -77,13 +77,13 @@ jobs:
         mkdir -p $HOME/pkgconfig
         if ! pkg-config --exists opus; then
           BREW_PREFIX=$(brew --prefix)
-          cat > $HOME/pkgconfig/opus.pc << EOF
-        Name: opus
-        Description: Opus IETF audio codec
-        Version: 1.3.1
-        Libs: -L${BREW_PREFIX}/lib -lopus
-        Cflags: -I${BREW_PREFIX}/include/opus
-        EOF
+          cat > $HOME/pkgconfig/opus.pc << 'EOF'
+Name: opus
+Description: Opus IETF audio codec
+Version: 1.3.1
+Libs: -L${BREW_PREFIX}/lib -lopus
+Cflags: -I${BREW_PREFIX}/include/opus
+EOF
           echo "PKG_CONFIG_PATH=$HOME/pkgconfig:$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         fi
         
@@ -338,7 +338,7 @@ jobs:
           VERSION_VALUE=$(cat version.txt)
           OUTPUT_NAME="${{ matrix.output_name }}"
           
-          cat > windows_build.cmd << EOL
+          cat > windows_build.cmd << 'EOL'
 set CGO_ENABLED=1
 set CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus
 set CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm
@@ -375,32 +375,32 @@ EOL
             VERSION_VALUE=$(cat version.txt)
             OUTPUT_NAME="${{ matrix.output_name }}"
             
-            cat > windows_build.ps1 << EOL
-\$env:CGO_ENABLED = '1'
-\$env:CGO_CFLAGS = '-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus'
-\$env:CGO_LDFLAGS = '-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm'
-\$env:PATH = 'C:/msys64/mingw64/bin;' + \$env:PATH
-\$outputName = '${OUTPUT_NAME}'
-\$version = '${VERSION_VALUE}'
+            cat > windows_build.ps1 << 'EOL'
+$env:CGO_ENABLED = '1'
+$env:CGO_CFLAGS = '-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus'
+$env:CGO_LDFLAGS = '-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm'
+$env:PATH = 'C:/msys64/mingw64/bin;' + $env:PATH
+$outputName = '${OUTPUT_NAME}'
+$version = '${VERSION_VALUE}'
 
 Write-Host '========== 尝试PowerShell构建 =========='
 try {
-  & go build -v -o \$outputName -ldflags "-X main.Version=\$version" ./cmd/client
-  if (Test-Path \$outputName) {
+  & go build -v -o $outputName -ldflags "-X main.Version=$version" ./cmd/client
+  if (Test-Path $outputName) {
     Write-Host '构建成功！'
     exit 0
   }
   
   Write-Host '尝试nogui标记'
-  & go build -v -o \$outputName -ldflags "-X main.Version=\$version" -tags=nogui ./cmd/client
-  if (Test-Path \$outputName) {
+  & go build -v -o $outputName -ldflags "-X main.Version=$version" -tags=nogui ./cmd/client
+  if (Test-Path $outputName) {
     Write-Host 'nogui构建成功！'
     exit 0
   }
   
   Write-Host '尝试static标记'
-  & go build -v -o \$outputName -ldflags "-X main.Version=\$version" -tags=static ./cmd/client
-  if (Test-Path \$outputName) {
+  & go build -v -o $outputName -ldflags "-X main.Version=$version" -tags=static ./cmd/client
+  if (Test-Path $outputName) {
     Write-Host 'static构建成功！'
     exit 0
   }
@@ -408,7 +408,7 @@ try {
   Write-Host '所有构建方法都失败'
   exit 1
 } catch {
-  Write-Host \$_.Exception.Message
+  Write-Host $_.Exception.Message
   exit 1
 }
 EOL
