@@ -16,14 +16,11 @@ jobs:
       contents: write
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
             output_name: xiaozhi-client-linux
             asset_name: xiaozhi-client-linux
-          - os: windows-latest
-            output_name: xiaozhi-client-windows.exe
-            asset_name: xiaozhi-client-windows
           - os: macos-latest
             output_name: xiaozhi-client-macos
             asset_name: xiaozhi-client-macos
@@ -92,223 +89,8 @@ EOF
         echo "CGO_CFLAGS=-I${BREW_PREFIX}/include -I${BREW_PREFIX}/include/opus" >> $GITHUB_ENV
         echo "CGO_LDFLAGS=-L${BREW_PREFIX}/lib -lopus" >> $GITHUB_ENV
 
-    - name: 安装依赖 (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        # 使用MSYS2安装PortAudio和Opus
-        choco install -y msys2
-        choco install -y mingw
-        C:\msys64\usr\bin\bash -lc "pacman --noconfirm -S mingw-w64-x86_64-portaudio mingw-w64-x86_64-pkg-config mingw-w64-x86_64-opus mingw-w64-x86_64-opusfile"
-        
-        # 设置CGO环境变量和路径
-        echo "CGO_ENABLED=1" >> $GITHUB_ENV
-        echo "C:/msys64/mingw64/bin" >> $GITHUB_PATH
-        
-        # 确保能找到pkg-config和库文件
-        echo "PKG_CONFIG_PATH=C:/msys64/mingw64/lib/pkgconfig" >> $GITHUB_ENV
-        echo "PKG_CONFIG=C:/msys64/mingw64/bin/pkg-config.exe" >> $GITHUB_ENV
-        
-        # 直接设置C和Go的编译标志
-        echo "CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus" >> $GITHUB_ENV
-        echo "CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm" >> $GITHUB_ENV
-        
-        # 将库文件复制到系统路径 - 使用Windows命令
-        echo "========== 复制库文件到系统路径 =========="
-        mkdir -p C:/Windows/System32/temp_libs
-
-        # 复制DLL文件 - 使用Windows commands
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/bin/ -Filter 'libopus*.dll' | Copy-Item -Destination C:/Windows/System32/temp_libs/ -Force"
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/bin/ -Filter 'libportaudio*.dll' | Copy-Item -Destination C:/Windows/System32/temp_libs/ -Force"
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/ -Filter 'libopus*.a' | Copy-Item -Destination C:/Windows/System32/temp_libs/ -Force"
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/ -Filter 'libportaudio*.a' | Copy-Item -Destination C:/Windows/System32/temp_libs/ -Force"
-        
-        # 设置库搜索路径
-        echo "LIB=C:\Windows\System32\temp_libs;%LIB%" >> $GITHUB_ENV
-        echo "LIBRARY_PATH=C:\Windows\System32\temp_libs;C:\msys64\mingw64\lib;%LIBRARY_PATH%" >> $GITHUB_ENV
-        
-        # 使用我们的脚本创建pkg-config文件
-        chmod +x .github/windows-pkgconfig.sh
-        bash .github/windows-pkgconfig.sh
-        # 添加我们自定义的pkgconfig路径
-        echo "PKG_CONFIG_PATH=C:/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-        
-        # 检查库和头文件是否存在 - 使用powershell
-        echo "=========== 检查opus和portaudio库文件 ==========="
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/ -Filter 'libopus*.a'"
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/ -Filter 'libportaudio*.a'"
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/include/ -Recurse -Filter 'opus.h'"
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/include/ -Filter 'portaudio.h'"
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/lib/pkgconfig/ -Filter '*.pc'"
-        
-        # 使用msys2 bash验证opus库是否可用
-        echo "=========== PKG-CONFIG结果 ==========="
-        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opus || echo 'opus pkg-config失败'"
-        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags opusfile || echo 'opusfile pkg-config失败'"
-        C:\msys64\usr\bin\bash -lc "pkg-config --libs --cflags portaudio-2.0 || echo 'portaudio pkg-config失败'"
-        # 列出已安装的包
-        echo "=========== 已安装的包 ==========="
-        C:\msys64\usr\bin\bash -lc "pacman -Q | grep opus"
-        C:\msys64\usr\bin\bash -lc "pacman -Q | grep portaudio"
-
     - name: 获取依赖
       run: go mod tidy
-
-    - name: 诊断CGO配置 (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        echo "============= 检查CGO和GCC配置 ============="
-        # 显示go环境变量
-        go env | findstr "CGO"
-        
-        # 检查gcc版本
-        gcc --version || echo "无法找到gcc"
-        
-        # 检查MinGW安装情况
-        if exist "C:/msys64/mingw64/bin/gcc.exe" (
-          echo "找到MinGW gcc"
-        ) else (
-          echo "找不到MinGW gcc"
-        )
-        
-        # 创建一个简单的C测试程序
-        echo #include ^<stdio.h^> > test.c
-        echo int main() { printf("Hello, World!\n"); return 0; } >> test.c
-        
-        # 尝试编译
-        echo "使用gcc编译简单C程序:"
-        gcc test.c -o test.exe && echo "C编译成功" || echo "C编译失败"
-        
-        # 创建一个使用cgo的简单程序
-        echo package main > test.go
-        echo import "C" >> test.go
-        echo import "fmt" >> test.go
-        echo func main() { fmt.Println("CGO测试") } >> test.go
-        
-        # 尝试编译
-        echo "使用go build编译CGO程序:"
-        go build -o test_go.exe test.go && echo "CGO编译成功" || echo "CGO编译失败"
-        
-        # 检查opus和portaudio库链接情况
-        echo "============= 检查OPUS库链接 ============="
-        echo #include ^<stdio.h^> > opus_test.c
-        echo #include ^<opus/opus.h^> >> opus_test.c
-        echo int main() { printf("Opus Test\n"); return 0; } >> opus_test.c
-        
-        # 尝试编译链接opus
-        echo "尝试编译链接opus库:"
-        gcc -o opus_test.exe opus_test.c -IC:/msys64/mingw64/include -LC:/msys64/mingw64/lib -lopus && echo "Opus编译成功" || echo "Opus编译失败"
-        
-        # 检查portaudio库
-        echo "============= 检查PortAudio库链接 ============="
-        echo #include ^<stdio.h^> > pa_test.c
-        echo #include ^<portaudio.h^> >> pa_test.c
-        echo int main() { printf("PortAudio Test\n"); return 0; } >> pa_test.c
-        
-        # 尝试编译链接portaudio
-        echo "尝试编译链接portaudio库:"
-        gcc -o pa_test.exe pa_test.c -IC:/msys64/mingw64/include -LC:/msys64/mingw64/lib -lportaudio -lwinmm && echo "PortAudio编译成功" || echo "PortAudio编译失败"
-        
-        # 检查opus头文件位置 - 使用PowerShell
-        echo "============= 检查opus头文件位置 ============="
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/include/ -Recurse -Filter 'opus.h'"
-        powershell -Command "Get-ChildItem -Path C:/msys64/mingw64/include/ -Filter 'portaudio.h'"
-      shell: cmd
-
-    - name: 测试自定义包装器 (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        echo "============= 测试自定义C包装器 ============="
-        
-        # 编译C包装器
-        echo "编译C包装器:"
-        gcc -c .github/windows_opus_wrapper.c -o windows_opus_wrapper.o -IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus && echo "C包装器编译成功" || echo "C包装器编译失败"
-        
-        # 测试Go静态包装器 - 使用命令行环境变量设置
-        echo "测试Go静态包装器:"
-        set CGO_ENABLED=1
-        set CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus
-        set CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm
-        set PATH=C:/msys64/mingw64/bin;%PATH%
-        go run .github/static_windows.go && echo "静态包装器测试成功" || echo "静态包装器测试失败"
-      shell: cmd
-
-    - name: 创建Windows构建脚本
-      if: matrix.os == 'windows-latest'
-      run: |
-        echo "============= 创建Windows专用构建脚本 ============="
-        
-        # 创建临时构建脚本
-        cat > build_windows.go << 'EOF'
-        //go:build ignore
-        
-        package main
-        
-        import (
-            "fmt"
-            "os"
-            "os/exec"
-            "path/filepath"
-            "strings"
-        )
-        
-        func main() {
-            // 获取命令行参数
-            args := os.Args[1:]
-            if len(args) < 1 {
-                fmt.Println("使用方法: go run build_windows.go <输出文件名> [版本]")
-                os.Exit(1)
-            }
-            
-            outputName := args[0]
-            version := "dev"
-            if len(args) > 1 {
-                version = args[1]
-            }
-            
-            // 设置环境变量
-            msys2Path := "C:\\msys64"
-            mingwPath := filepath.Join(msys2Path, "mingw64")
-            
-            os.Setenv("CGO_ENABLED", "1")
-            os.Setenv("CGO_CFLAGS", fmt.Sprintf("-I%s\\include -I%s\\include\\opus", mingwPath, mingwPath))
-            os.Setenv("CGO_LDFLAGS", fmt.Sprintf("-L%s\\lib -lopus -lportaudio -lwinmm", mingwPath))
-            
-            // 添加必要路径到PATH
-            path := os.Getenv("PATH")
-            newPath := fmt.Sprintf("%s\\bin;%s", mingwPath, path)
-            os.Setenv("PATH", newPath)
-            
-            // 输出环境信息
-            fmt.Println("========== 环境信息 ==========")
-            fmt.Printf("MINGW_PATH: %s\n", mingwPath)
-            fmt.Printf("CGO_CFLAGS: %s\n", os.Getenv("CGO_CFLAGS"))
-            fmt.Printf("CGO_LDFLAGS: %s\n", os.Getenv("CGO_LDFLAGS"))
-            
-            // 构建命令
-            cmd := exec.Command("go", "build", "-v", "-o", outputName, 
-                        "-ldflags", fmt.Sprintf("-X main.Version=%s", version),
-                        "./cmd/client")
-            
-            // 输出命令
-            fmt.Printf("执行命令: %s\n", strings.Join(cmd.Args, " "))
-            
-            // 设置标准输出
-            cmd.Stdout = os.Stdout
-            cmd.Stderr = os.Stderr
-            
-            // 执行构建
-            err := cmd.Run()
-            if err != nil {
-                fmt.Printf("构建失败: %v\n", err)
-                os.Exit(1)
-            }
-            
-            fmt.Println("构建成功！")
-        }
-        EOF
-        
-        echo "构建脚本已创建"
-      shell: bash
 
     - name: 构建应用
       run: |
@@ -323,122 +105,8 @@ EOF
         # 调试输出Go环境
         go env
         
-        # 针对Windows的特殊构建设置
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
-          # Windows特殊构建标志
-          echo "========== Windows环境构建 =========="
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-          echo "CGO_CFLAGS=$CGO_CFLAGS"
-          echo "CGO_LDFLAGS=$CGO_LDFLAGS"
-          
-          # 使用cmd脚本进行Windows构建
-          echo "========== 使用CMD脚本构建 =========="
-          # 准备版本号和输出文件名
-          echo "$VERSION" > version.txt
-          VERSION_VALUE=$(cat version.txt)
-          OUTPUT_NAME="${{ matrix.output_name }}"
-          
-          cat > windows_build.cmd << 'EOL'
-set CGO_ENABLED=1
-set CGO_CFLAGS=-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus
-set CGO_LDFLAGS=-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm
-set PATH=C:/msys64/mingw64/bin;%PATH%
-set VERSION=$VERSION_VALUE
-set OUTPUT_NAME=$OUTPUT_NAME
-
-echo ========== 尝试直接构建 ==========
-go build -v -o %OUTPUT_NAME% -ldflags "-X main.Version=%VERSION%" ./cmd/client
-if %ERRORLEVEL% NEQ 0 (
-  echo 标准构建失败，尝试nogui标记
-  go build -v -o %OUTPUT_NAME% -ldflags "-X main.Version=%VERSION%" -tags=nogui ./cmd/client
-)
-if not exist %OUTPUT_NAME% (
-  echo nogui构建失败，尝试static标记
-  go build -v -o %OUTPUT_NAME% -ldflags "-X main.Version=%VERSION%" -tags=static ./cmd/client
-)
-if exist %OUTPUT_NAME% (
-  echo 构建成功：%OUTPUT_NAME%
-  exit /b 0
-) else (
-  echo 所有构建方法都失败
-  exit /b 1
-)
-EOL
-          # 替换环境变量
-          sed -i "s/\$VERSION_VALUE/$VERSION_VALUE/g" windows_build.cmd
-          sed -i "s/\$OUTPUT_NAME/$OUTPUT_NAME/g" windows_build.cmd
-          cmd /c "windows_build.cmd" 2>&1 | tee build_log.txt
-          
-          # 检查是否构建成功
-          if [ ! -f "${{ matrix.output_name }}" ]; then
-            echo "CMD脚本构建失败，尝试PowerShell脚本..."
-            
-            # 准备版本号变量和输出文件名
-            echo "$VERSION" > version.txt
-            VERSION_VALUE=$(cat version.txt)
-            OUTPUT_NAME="${{ matrix.output_name }}"
-            
-            cat > windows_build.ps1 << 'EOL'
-$env:CGO_ENABLED = '1'
-$env:CGO_CFLAGS = '-IC:/msys64/mingw64/include -IC:/msys64/mingw64/include/opus'
-$env:CGO_LDFLAGS = '-LC:/msys64/mingw64/lib -lopus -lportaudio -lwinmm'
-$env:PATH = 'C:/msys64/mingw64/bin;' + $env:PATH
-$outputName = 'OUTPUT_NAME_PLACEHOLDER'
-$version = 'VERSION_VALUE_PLACEHOLDER'
-
-Write-Host '========== 尝试PowerShell构建 =========='
-try {
-  & go build -v -o $outputName -ldflags "-X main.Version=$version" ./cmd/client
-  if (Test-Path $outputName) {
-    Write-Host '构建成功！'
-    exit 0
-  }
-  
-  Write-Host '尝试nogui标记'
-  & go build -v -o $outputName -ldflags "-X main.Version=$version" -tags=nogui ./cmd/client
-  if (Test-Path $outputName) {
-    Write-Host 'nogui构建成功！'
-    exit 0
-  }
-  
-  Write-Host '尝试static标记'
-  & go build -v -o $outputName -ldflags "-X main.Version=$version" -tags=static ./cmd/client
-  if (Test-Path $outputName) {
-    Write-Host 'static构建成功！'
-    exit 0
-  }
-  
-  Write-Host '所有构建方法都失败'
-  exit 1
-} catch {
-  Write-Host $_.Exception.Message
-  exit 1
-}
-EOL
-            # 替换环境变量
-            sed -i "s/OUTPUT_NAME_PLACEHOLDER/$OUTPUT_NAME/g" windows_build.ps1
-            sed -i "s/VERSION_VALUE_PLACEHOLDER/$VERSION_VALUE/g" windows_build.ps1
-            powershell -ExecutionPolicy Bypass -File windows_build.ps1 2>&1 | tee -a build_log.txt
-          fi
-          
-          # 保存错误日志
-          echo "========== 构建日志摘要 =========="
-          if [ -f "build_log.txt" ]; then
-            echo "构建日志内容:"
-            # 使用PowerShell查找错误
-            powershell -Command "Get-Content build_log.txt | Select-String -Pattern 'error|fail' -CaseSensitive:$false" || echo "没有找到明显错误"
-          fi
-          
-          # 检查最终结果
-          if [ -f "${{ matrix.output_name }}" ]; then
-            echo "========== 构建成功 =========="
-            ls -la ${{ matrix.output_name }}
-          else
-            echo "========== 构建失败 =========="
-            exit 1
-          fi
         # 针对macOS的特殊构建设置
-        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
           # 尝试使用特定标志构建
           go build -v -x -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" -tags=dynamic ./cmd/client
         else
@@ -449,16 +117,9 @@ EOL
       env:
         CGO_ENABLED: 1
 
-    - name: 压缩构建产物 (Unix-like)
-      if: matrix.os != 'windows-latest'
+    - name: 压缩构建产物
       run: |
         tar -czvf ${{ matrix.asset_name }}.tar.gz ${{ matrix.output_name }}
-      shell: bash
-
-    - name: 压缩构建产物 (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        7z a ${{ matrix.asset_name }}.zip ${{ matrix.output_name }}
       shell: bash
 
     - name: 上传构建产物
@@ -467,20 +128,8 @@ EOL
         name: ${{ matrix.asset_name }}
         path: |
           ${{ matrix.asset_name }}.tar.gz
-          ${{ matrix.asset_name }}.zip
         if-no-files-found: warn
         retention-days: 5
-
-    - name: 上传Windows构建日志 (如果失败)
-      if: failure() && matrix.os == 'windows-latest'
-      uses: actions/upload-artifact@v4
-      with:
-        name: windows-build-logs
-        path: |
-          build_log.txt
-          go.mod
-          go.sum
-        if-no-files-found: warn
 
   release:
     name: 创建发布
@@ -502,7 +151,6 @@ EOL
         with:
           files: |
             xiaozhi-client-linux/xiaozhi-client-linux.tar.gz
-            xiaozhi-client-windows/xiaozhi-client-windows.zip
             xiaozhi-client-macos/xiaozhi-client-macos.tar.gz
           draft: false
-          prerelease: false 
+          prerelease: false
