@@ -458,6 +458,7 @@ func main() {
 				logrus.Debug("音频播放器在哑模式下运行，可能无法实际播放音频")
 			}
 
+			c.SetState(client.StateSpeaking)
 			// 将Opus编码的音频数据添加到播放队列
 			audioPlayer.QueueAudio(data)
 
@@ -480,6 +481,7 @@ func main() {
 					} else {
 						// 现在我们有了播放器，重新尝试添加音频数据
 						audioPlayer.QueueAudio(data)
+						c.SetState(client.StateSpeaking)
 						logrus.Debug("已将音频数据添加到重新初始化的播放器队列")
 					}
 				}
@@ -596,6 +598,7 @@ func handleKeyPress(c *client.Client, key string, isRecording *bool) {
 
 		// 检查客户端当前状态
 		currentState := c.GetState()
+		logrus.Info("当前客户端状态:", currentState)
 		if currentState == client.StateSpeaking {
 			logrus.Info("正在中断AI回复以开始录音...")
 			c.SendAbortSpeaking("start_recording")

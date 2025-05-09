@@ -172,8 +172,8 @@ func (c *Client) GetState() string {
 	return c.state
 }
 
-// setState 内部方法，用于更新状态并触发回调
-func (c *Client) setState(newState string) {
+// SetState 内部方法，用于更新状态并触发回调
+func (c *Client) SetState(newState string) {
 	c.mu.Lock()
 	oldState := c.state
 	c.state = newState
@@ -192,7 +192,7 @@ func (c *Client) OpenAudioChannel(url string) error {
 		c.mu.Unlock()
 		return errors.New("客户端不在空闲状态，无法打开音频通道")
 	}
-	c.setState(StateConnecting)
+	c.SetState(StateConnecting)
 
 	// 准备请求头 - 确保请求头设置完整
 	if c.token != "" {
@@ -265,13 +265,13 @@ func (c *Client) OpenAudioChannel(url string) error {
 	case err = <-connectDone:
 		if err != nil {
 			logrus.Errorf("WebSocket连接失败: %v", err)
-			c.setState(StateIdle)
+			c.SetState(StateIdle)
 			return err
 		}
 		logrus.Info("WebSocket连接成功，准备发送hello消息")
 	case <-time.After(15 * time.Second):
 		logrus.Error("WebSocket连接超时 (15秒)")
-		c.setState(StateIdle)
+		c.SetState(StateIdle)
 		return errors.New("连接WebSocket服务器超时")
 	}
 
@@ -297,7 +297,7 @@ func (c *Client) OpenAudioChannel(url string) error {
 	if err != nil {
 		logrus.Errorf("发送hello消息失败: %v", err)
 		c.protocol.Disconnect()
-		c.setState(StateIdle)
+		c.SetState(StateIdle)
 		return err
 	}
 	logrus.Info("已成功发送hello消息，等待服务器响应")
@@ -319,7 +319,7 @@ func (c *Client) OpenAudioChannel(url string) error {
 		// 超时未收到Hello响应
 		logrus.Error("等待服务器hello响应超时")
 		c.protocol.Disconnect()
-		c.setState(StateIdle)
+		c.SetState(StateIdle)
 		return errors.New("等待服务器Hello响应超时")
 	}
 }
@@ -357,7 +357,7 @@ func (c *Client) CloseAudioChannel() error {
 	c.handleDisconnected(err)
 
 	// 确保状态设置为空闲
-	c.setState(StateIdle)
+	c.SetState(StateIdle)
 
 	return err
 }
@@ -398,7 +398,7 @@ func (c *Client) SendStartListening(mode string) error {
 	}
 
 	// 更新状态
-	c.setState(StateListening)
+	c.SetState(StateListening)
 	return nil
 }
 
@@ -690,10 +690,10 @@ func (c *Client) handleTTSMessage(data []byte) {
 	switch tts.State {
 	case "start":
 		// TTS开始，切换到播放状态
-		c.setState(StateSpeaking)
+		c.SetState(StateSpeaking)
 	case "stop":
 		// TTS结束，切换到空闲状态
-		c.setState(StateIdle)
+		c.SetState(StateIdle)
 	case "sentence_start":
 		// 句子开始，调用文本回调
 		c.mu.Lock()

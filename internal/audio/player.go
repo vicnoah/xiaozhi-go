@@ -18,6 +18,8 @@ type AudioPlayerNew struct {
 	queueMutex      sync.Mutex            // 队列互斥锁
 	isPlaying       bool                  // 是否正在播放
 	stopChan        chan struct{}         // 停止信号通道
+	stopChanMutex   sync.Mutex            // 通道关闭互斥锁
+	stopChanClosed  bool                  // 通道是否已关闭
 	sampleRate      int                   // 采样率
 	channelCount    int                   // 通道数
 	framesPerBuffer int                   // 每次回调的帧数
@@ -58,6 +60,8 @@ func NewAudioPlayerWithOptions(options NewPlayerOptions, decoder Decoder) (*Audi
 		buffer:          make([]int16, options.FramesPerBuffer*options.ChannelCount),
 		queue:           make([][]int16, 0, 100), // 预分配适当大小的队列
 		stopChan:        make(chan struct{}),
+		stopChanMutex:   sync.Mutex{},
+		stopChanClosed:  false,
 		sampleRate:      options.SampleRate,
 		channelCount:    options.ChannelCount,
 		framesPerBuffer: options.FramesPerBuffer,
@@ -140,6 +144,14 @@ func NewAudioPlayer2(sampleRate, channelCount, frameDuration int, decoder Decode
 func (p *AudioPlayerNew) Start() error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
+
+	// 重建stopChan并重置stopChanClosed，保证多次Start/Stop安全
+	p.stopChanMutex.Lock()
+	if p.stopChanClosed {
+		p.stopChan = make(chan struct{})
+		p.stopChanClosed = false
+	}
+	p.stopChanMutex.Unlock()
 
 	if p.isPlaying {
 		return nil
@@ -303,8 +315,13 @@ func (p *AudioPlayerNew) Stop() error {
 	p.isPlaying = false
 	p.mutex.Unlock()
 
-	// 发送停止信号
-	close(p.stopChan)
+	// 发送停止信号，防止重复关闭
+	p.stopChanMutex.Lock()
+	if !p.stopChanClosed {
+		close(p.stopChan)
+		p.stopChanClosed = true
+	}
+	p.stopChanMutex.Unlock()
 
 	// 清空队列
 	p.queueMutex.Lock()
