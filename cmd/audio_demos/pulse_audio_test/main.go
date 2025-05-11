@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/JustaCai/xiaozhi-go/internal/audio"
+	"github.com/justa-cai/xiaozhi-go/internal/audio"
 	"github.com/sirupsen/logrus"
 )
 
@@ -76,18 +76,32 @@ func findPulseAudioDevices() {
 		logrus.Errorf("获取音频设备失败: %v", err)
 		return
 	}
+	if devices == nil || len(devices) == 0 {
+		logrus.Info("当前平台不支持音频设备枚举")
+		return
+	}
 
 	logrus.Info("查找PulseAudio设备:")
 	found := false
 
 	for i, dev := range devices {
-		if strings.Contains(strings.ToLower(dev.Name), "pulse") {
-			logrus.Infof("[%d] 找到PulseAudio设备: %s", i, dev.Name)
-			if dev.MaxInputChannels > 0 {
-				logrus.Infof("    - 可用作输入设备（通道数: %d）", dev.MaxInputChannels)
+		// 这里假设有 DeviceInfo 类型，否则直接跳过
+		info, ok := dev.(struct {
+			Name              string
+			MaxInputChannels  int
+			MaxOutputChannels int
+		})
+		if !ok {
+			logrus.Warnf("未知设备类型，跳过: %#v", dev)
+			continue
+		}
+		if strings.Contains(strings.ToLower(info.Name), "pulse") {
+			logrus.Infof("[%d] 找到PulseAudio设备: %s", i, info.Name)
+			if info.MaxInputChannels > 0 {
+				logrus.Infof("    - 可用作输入设备（通道数: %d）", info.MaxInputChannels)
 			}
-			if dev.MaxOutputChannels > 0 {
-				logrus.Infof("    - 可用作输出设备（通道数: %d）", dev.MaxOutputChannels)
+			if info.MaxOutputChannels > 0 {
+				logrus.Infof("    - 可用作输出设备（通道数: %d）", info.MaxOutputChannels)
 			}
 			found = true
 		}

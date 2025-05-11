@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JustaCai/xiaozhi-go/internal/protocol"
 	"github.com/google/uuid"
+	"github.com/justa-cai/xiaozhi-go/internal/protocol"
 	"github.com/sirupsen/logrus"
 )
 

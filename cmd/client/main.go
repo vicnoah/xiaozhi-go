@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/JustaCai/xiaozhi-go/internal/audio"
-	"github.com/JustaCai/xiaozhi-go/internal/client"
-	"github.com/JustaCai/xiaozhi-go/internal/ota"
-	"github.com/JustaCai/xiaozhi-go/internal/protocol"
+	"github.com/justa-cai/xiaozhi-go/internal/audio"
+	"github.com/justa-cai/xiaozhi-go/internal/client"
+	"github.com/justa-cai/xiaozhi-go/internal/ota"
+	"github.com/justa-cai/xiaozhi-go/internal/protocol"
 	"github.com/sirupsen/logrus"
 )
 
@@ -58,6 +58,8 @@ var terminalMutex sync.Mutex
 
 // 全局音频数据通道
 var audioChan chan []byte
+
+var audioInited = false
 
 func init() {
 	// 解析命令行参数
@@ -443,49 +445,31 @@ func main() {
 		}
 
 		// 处理Opus编码的音频数据
-		if audioPlayer != nil {
+		if audioManager != nil && audioManager.Player() != nil {
 			// 检查音频播放器状态
-			if !audioPlayer.IsPlaying() {
+			if !audioManager.Player().IsPlaying() {
 				// 播放器未运行，可能是因为刚初始化或之前有错误
 				logrus.Debug("音频播放器未运行，尝试启动...")
-				if err := audioPlayer.Start(); err != nil {
+				if err := audioManager.Player().Start(); err != nil {
 					logrus.Errorf("启动音频播放器失败: %v", err)
 				}
 			}
 
 			// 如果播放器在哑模式下运行，记录一下
-			if audioPlayer.IsDummyMode() && verboseLogging {
+			if audioManager.Player().IsDummyMode() && verboseLogging {
 				logrus.Debug("音频播放器在哑模式下运行，可能无法实际播放音频")
 			}
 
 			c.SetState(client.StateSpeaking)
 			// 将Opus编码的音频数据添加到播放队列
-			audioPlayer.QueueAudio(data)
+			audioManager.Player().QueueAudio(data)
 
 			if verboseLogging {
 				logrus.Debugf("已将%d字节Opus编码音频数据添加到播放队列", len(data))
 			}
 		} else {
 			logrus.Warn("音频播放器未初始化，无法播放收到的音频数据")
-			// 可能需要尝试重新初始化播放器
-			if audioManager != nil {
-				// 尝试使用默认设置重新初始化播放器
-				codec, err := audio.NewOpusCodec(16000, 1)
-				if err != nil {
-					logrus.Errorf("重新初始化音频编解码器失败: %v", err)
-				} else {
-					audioPlayer = audio.NewAudioPlayer2(16000, 1, 60, codec)
-					logrus.Info("已重新初始化音频播放器")
-					if err := audioPlayer.Start(); err != nil {
-						logrus.Errorf("启动重新初始化的音频播放器失败: %v", err)
-					} else {
-						// 现在我们有了播放器，重新尝试添加音频数据
-						audioPlayer.QueueAudio(data)
-						c.SetState(client.StateSpeaking)
-						logrus.Debug("已将音频数据添加到重新初始化的播放器队列")
-					}
-				}
-			}
+			// 不再尝试 new audioPlayer，直接报错
 		}
 	})
 
@@ -732,37 +716,22 @@ func initAudio() {
 	logrus.Debug("开始初始化音频系统...")
 
 	// 创建音频管理器
-	audioManager, err = audio.NewAudioManager2()
+	audioManager, err = audio.NewAudioManager()
 	if err != nil {
 		logrus.Warnf("初始化音频管理器失败: %v，将无法录音", err)
-		// 不退出程序，继续运行但不使用音频功能
 	} else {
 		logrus.Debug("音频管理器初始化成功")
 	}
 
-	// 创建Opus编解码器和音频播放器
-	codec, err := audio.NewOpusCodec(audio.DefaultSampleRate, audio.DefaultChannelCount)
-	if err != nil {
-		logrus.Warnf("初始化音频编解码器失败: %v，将无法播放声音", err)
-	} else {
-		// 创建音频播放器
-		audioPlayer = audio.NewAudioPlayer2(audio.DefaultSampleRate, audio.DefaultChannelCount, audio.DefaultFrameDuration, codec)
-
-		// 启动音频播放器
-		if err := audioPlayer.Start(); err != nil {
-			logrus.Warnf("启动音频播放器失败: %v，将无法播放声音", err)
-		} else {
-			logrus.Debug("音频播放器启动成功")
-		}
-	}
+	// audioPlayer 的初始化全部移除，防止oto.NewContext多次调用
 
 	logrus.Info("音频系统初始化完成")
 }
 
 // cleanupAudio 清理音频系统资源
 func cleanupAudio() {
-	if audioPlayer != nil {
-		if err := audioPlayer.Close(); err != nil {
+	if audioManager != nil && audioManager.Player() != nil {
+		if err := audioManager.Player().Close(); err != nil {
 			logrus.Errorf("关闭音频播放器失败: %v", err)
 		}
 	}
@@ -789,8 +758,8 @@ func stopAudioPlayback(c *client.Client) {
 	time.Sleep(500 * time.Millisecond)
 
 	// 停止音频播放
-	if audioPlayer != nil && audioPlayer.IsPlaying() {
-		if err := audioPlayer.Stop(); err != nil {
+	if audioManager != nil && audioManager.Player() != nil && audioManager.Player().IsPlaying() {
+		if err := audioManager.Player().Stop(); err != nil {
 			logrus.Errorf("停止音频播放失败: %v", err)
 		} else {
 			logrus.Info("已停止音频播放")
@@ -851,11 +820,11 @@ func setupCallbacks(c *client.Client) {
 
 	// 音频数据回调
 	c.SetOnAudioData(func(data []byte) {
-		logrus.Debugf("收到音频数据: %d字节", len(data))
+		// logrus.Debugf("收到音频数据: %d字节", len(data))
 		// 将音频数据添加到播放队列
-		if audioPlayer != nil && audioPlayer.IsPlaying() {
-			audioPlayer.QueueAudio(data)
-			if audioPlayer.IsDummyMode() {
+		if audioManager != nil && audioManager.Player() != nil {
+			audioManager.Player().QueueAudio(data)
+			if audioManager.Player().IsDummyMode() {
 				// 如果是哑模式，简单记录一下
 				logrus.Debugf("音频在哑模式下处理")
 			}
@@ -940,6 +909,8 @@ func startRecording(c *client.Client) {
 		if audioChan == nil {
 			return
 		}
+
+		// logrus.Printf("收到音频数据: %d字节", len(data))
 
 		// 发送到通道，不阻塞
 		select {
@@ -1106,7 +1077,6 @@ func readInput(keyPressCh chan<- string, commandCh chan<- string) {
 
 // reinitializeOpusDecoder 重新初始化Opus解码器
 func reinitializeOpusDecoder(sampleRate, channels, frameDuration int) {
-	// 忽略无效参数
 	if sampleRate <= 0 || channels <= 0 || frameDuration <= 0 {
 		logrus.Error("无效的音频参数，无法初始化Opus解码器")
 		return
@@ -1115,39 +1085,22 @@ func reinitializeOpusDecoder(sampleRate, channels, frameDuration int) {
 	logrus.Infof("开始重新初始化Opus解码器: sample_rate=%d, channels=%d, frame_duration=%d",
 		sampleRate, channels, frameDuration)
 
-	// 如果当前没有audioPlayer，记录错误并返回
-	if audioPlayer == nil {
-		logrus.Error("audioPlayer未初始化，无法重新初始化解码器")
+	if audioManager == nil {
+		logrus.Error("audioManager未初始化，无法重新初始化解码器")
 		return
 	}
 
-	// 先停止当前的audioPlayer
-	if audioPlayer.IsPlaying() {
-		if err := audioPlayer.Stop(); err != nil {
-			logrus.Warnf("停止当前音频播放器失败: %v", err)
-		}
+	if audioInited {
+		logrus.Warn("检测到服务器音频参数变化，Oto 不支持热切换采样率，请重启程序以应用新参数！")
+		return
 	}
 
-	// 创建新的audioPlayer，使用更兼容的采样率
-	codec, err := audio.NewOpusCodec(sampleRate, channels)
+	err := audioManager.RecreatePlayer(sampleRate, channels, frameDuration)
 	if err != nil {
-		logrus.Errorf("创建新的音频编解码器失败: %v", err)
-		return
-	}
-	newAudioPlayer := audio.NewAudioPlayer2(sampleRate, channels, frameDuration, codec)
-
-	// 关闭旧的audioPlayer
-	if err := audioPlayer.Close(); err != nil {
-		logrus.Warnf("关闭旧的音频播放器失败: %v", err)
-	}
-
-	// 更新全局audioPlayer
-	audioPlayer = newAudioPlayer
-
-	// 启动新的audioPlayer
-	if err := audioPlayer.Start(); err != nil {
-		logrus.Warnf("启动新的音频播放器失败: %v", err)
+		logrus.Errorf("重建播放器失败: %v", err)
 	} else {
-		logrus.Info("✅ 成功重新初始化Opus解码器并启动音频播放器")
+		audioManager.Player().Start()
+		logrus.Info("已根据服务器参数重建播放器")
+		audioInited = true
 	}
 }

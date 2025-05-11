@@ -2,7 +2,7 @@
 
 [![Go版本](https://img.shields.io/badge/Go-1.20+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![许可证](https://img.shields.io/badge/许可证-MIT-green)](LICENSE)
-[![构建状态](https://img.shields.io/github/actions/workflow/status/JustaCai/xiaozhi-go/build.yml?branch=main)](https://github.com/JustaCai/xiaozhi-go/actions/workflows/build.yml)
+[![构建状态](https://img.shields.io/github/actions/workflow/status/JustaCai/xiaozhi-go/build.yml?branch=main)](https://github.com/justa-cai/xiaozhi-go/actions/workflows/build.yml)
 
 小知(Xiaozhi)是一个基于WebSocket协议的智能语音助手客户端，支持实时语音识别、对话和物联网控制功能。
 
@@ -27,14 +27,14 @@
 
 #### 方法1：下载预编译版本
 
-您可以从[GitHub Releases](https://github.com/JustaCai/xiaozhi-go/releases)页面下载适合您操作系统的预编译版本。
+您可以从[GitHub Releases](https://github.com/justa-cai/xiaozhi-go/releases)页面下载适合您操作系统的预编译版本。
 
 #### 方法2：从源码构建
 
 1. 克隆代码库：
 
 ```bash
-git clone https://github.com/JustaCai/xiaozhi-go.git
+git clone https://github.com/justa-cai/xiaozhi-go.git
 cd xiaozhi-go
 ```
 
