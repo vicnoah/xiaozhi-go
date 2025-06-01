@@ -35,16 +35,14 @@ jobs:
 
     - name: Install audio libraries (macOS only)
       if: matrix.os == 'macos-latest'
-      run: |
-        arch -x86_64 brew update
-        arch -x86_64 brew install portaudio opus opusfile pkg-config
+      run: brew install portaudio opus opusfile pkg-config
 
     - name: Set macOS env for CGO
       if: matrix.os == 'macos-latest'
       run: |
-        echo "PKG_CONFIG_PATH=$(arch -x86_64 brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-        echo "CGO_CFLAGS=-I$(arch -x86_64 brew --prefix)/include -I$(arch -x86_64 brew --prefix)/include/opus" >> $GITHUB_ENV
-        echo "CGO_LDFLAGS=-L$(arch -x86_64 brew --prefix)/lib -lopus" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        echo "CGO_CFLAGS=-I$(brew --prefix)/include -I$(brew --prefix)/include/opus" >> $GITHUB_ENV
+        echo "CGO_LDFLAGS=-L$(brew --prefix)/lib -lopus" >> $GITHUB_ENV
 
     - name: Install dependencies
       run: |
