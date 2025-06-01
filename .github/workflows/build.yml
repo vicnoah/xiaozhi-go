@@ -73,6 +73,12 @@ jobs:
         CGO_ENABLED=1 \
         go build -x -v -o $OUTPUT ./cmd/client
 
+    - name: Package Linux/macOS artifacts
+      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      shell: bash
+      run: |
+        tar -czvf xiaozhi-client-${{ matrix.os }}.tar.gz xiaozhi-client
+
     - name: Prepare Windows artifacts
       if: matrix.os == 'windows-latest'
       shell: bash
@@ -87,7 +93,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: xiaozhi-client-${{ matrix.os }}
-        path: ${{ matrix.os == 'windows-latest' && 'xiaozhi-client-windows.zip' || matrix.os == 'macos-latest' && 'xiaozhi-client' || 'xiaozhi-client' }}
+        path: ${{ matrix.os == 'windows-latest' && 'xiaozhi-client-windows.zip' || 'xiaozhi-client-' + matrix.os + '.tar.gz' }}
 
   release:
     name: Release
@@ -107,9 +113,9 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          artifacts/xiaozhi-client-ubuntu-latest
-          artifacts/xiaozhi-client-macos-latest
-          artifacts/xiaozhi-client-windows-latest
+          artifacts/xiaozhi-client-ubuntu-latest/xiaozhi-client-ubuntu-latest.tar.gz
+          artifacts/xiaozhi-client-macos-latest/xiaozhi-client-macos-latest.tar.gz
+          artifacts/xiaozhi-client-windows-latest/xiaozhi-client-windows.zip
         draft: false
         prerelease: false
         generate_release_notes: true
