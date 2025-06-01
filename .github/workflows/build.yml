@@ -67,7 +67,7 @@ jobs:
           if [ -z "$VERSION" ]; then
             VERSION="dev"
           fi
-          go build -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
+          go build -x -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
         env:
           CGO_ENABLED: 1
 
