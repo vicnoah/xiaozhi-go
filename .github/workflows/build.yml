@@ -39,7 +39,7 @@ jobs:
 
       - name: 安装依赖 (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev libasound2-dev libopus-dev pkg-config libopusfile-dev
+        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev libasound2-dev libopus-dev pkg-config libopusfile-dev libpulse-dev
         env:
           DEBIAN_FRONTEND: noninteractive
 
@@ -63,11 +63,12 @@ jobs:
 
       - name: 构建应用
         run: |
+          set -euo pipefail
           VERSION=$(echo $GITHUB_REF | sed -e 's/refs\/tags\/V//' -e 's/refs\/heads\///')
           if [ -z "$VERSION" ]; then
             VERSION="dev"
           fi
-          go build -x -v -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
+          go build -x -v -work -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
         env:
           CGO_ENABLED: 1
 
