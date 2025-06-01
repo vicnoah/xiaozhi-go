@@ -16,7 +16,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             output_name: xiaozhi-client-linux
@@ -24,6 +24,9 @@ jobs:
           - os: macos-latest
             output_name: xiaozhi-client-macos
             asset_name: xiaozhi-client-macos
+          - os: windows-latest
+            output_name: xiaozhi-client-windows.exe
+            asset_name: xiaozhi-client-windows
 
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +54,10 @@ jobs:
           echo "CGO_CFLAGS=-I$(brew --prefix)/include -I$(brew --prefix)/include/opus" >> $GITHUB_ENV
           echo "CGO_LDFLAGS=-L$(brew --prefix)/lib -lopus" >> $GITHUB_ENV
 
+      - name: 安装依赖 (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install portaudio opus opusfile pkgconfig
+
       - name: 获取依赖
         run: go mod tidy
 
@@ -66,6 +73,14 @@ jobs:
 
       - name: 压缩构建产物
         run: tar -czvf ${{ matrix.asset_name }}.tar.gz ${{ matrix.output_name }}
+
+      - name: 压缩构建产物 (Windows)
+        if: matrix.os == 'windows-latest'
+        run: Compress-Archive -Path ${{ matrix.output_name }} -DestinationPath ${{ matrix.asset_name }}.zip
+
+      - name: 拷贝 opus.dll (Windows)
+        if: matrix.os == 'windows-latest'
+        run: Copy-Item -Path ./cmd/client/opus.dll -Destination .
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -102,6 +117,7 @@ jobs:
           files: |
             xiaozhi-client-linux/xiaozhi-client-linux.tar.gz
             xiaozhi-client-macos/xiaozhi-client-macos.tar.gz
+            xiaozhi-client-windows/xiaozhi-client-windows.zip
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
