@@ -56,12 +56,16 @@ jobs:
 
       - name: 安装依赖 (Windows)
         if: matrix.os == 'windows-latest'
-        run: echo "Windows 无需安装 portaudio opus opusfile pkgconfig"
+        run: |
+          choco install mingw
+          echo "已安装 mingw 和 gcc 工具链"
 
       - name: 获取依赖
         run: go mod tidy
 
       - name: 构建应用
+        if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
           set -euo pipefail
           VERSION=$(echo $GITHUB_REF | sed -e 's/refs\/tags\/V//' -e 's/refs\/heads\///')
