@@ -38,7 +38,14 @@ jobs:
       run: |
         brew update
         brew install portaudio opus opusfile pkg-config
-
+	
+    - name: 设置macOS环境变量
+      if: matrix.os == 'macos-latest'
+      run: |
+        echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        echo "CGO_CFLAGS=-I$(brew --prefix)/include -I$(brew --prefix)/include/opus" >> $GITHUB_ENV
+        echo "CGO_LDFLAGS=-L$(brew --prefix)/lib -lopus" >> $GITHUB_ENV
+	  
     - name: Install dependencies
       run: |
         go mod download
