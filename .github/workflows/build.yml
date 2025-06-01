@@ -59,6 +59,7 @@ jobs:
         fi
         
         GOARCH=amd64 \
+        CGO_ENABLED=1 \
         go build -x -v -o $OUTPUT ./cmd/client
 
     - name: Prepare Windows artifacts
