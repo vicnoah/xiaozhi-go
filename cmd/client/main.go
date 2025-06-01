@@ -886,6 +886,13 @@ func startRecording(c *client.Client) {
 	// 创建一个带缓冲的通道来接收音频数据
 	audioChan = make(chan []byte, 100) // 足够大的缓冲区
 
+	// 设置PCM数据回调
+	audioManager.SetPCMDataCallback(func(data []int16, size int) {
+		// 复制数据以避免竞争条件
+		dataCopy := make([]int16, size)
+		copy(dataCopy, data[:size])
+	})
+
 	// 启动一个单独的goroutine处理音频数据发送
 	go func() {
 		for data := range audioChan {
@@ -909,8 +916,6 @@ func startRecording(c *client.Client) {
 		if audioChan == nil {
 			return
 		}
-
-		// logrus.Printf("收到音频数据: %d字节", len(data))
 
 		// 发送到通道，不阻塞
 		select {

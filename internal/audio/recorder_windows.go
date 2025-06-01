@@ -7,6 +7,9 @@ package audio
 #include <windows.h>
 #include <mmsystem.h>
 #include <stdlib.h>
+#include <string.h>
+
+#define BUFFER_SIZE 960  // 60ms at 16kHz
 
 HWAVEIN hWaveIn;
 WAVEHDR waveHdr;
@@ -22,37 +25,53 @@ int start_recording(int sampleRate, int channels, int bufsize) {
     wfx.nAvgBytesPerSec = wfx.nSamplesPerSec * wfx.nBlockAlign;
     wfx.cbSize = 0;
 
-    buffer = (short*)malloc(bufsize * sizeof(short));
-    if (waveInOpen(&hWaveIn, WAVE_MAPPER, &wfx, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
+    buffer = (short*)malloc(BUFFER_SIZE * sizeof(short));
+    if (!buffer) {
         return -1;
     }
-    waveHdr.lpData = (LPSTR)buffer;
-    waveHdr.dwBufferLength = bufsize * sizeof(short);
-    waveHdr.dwFlags = 0;
-    waveHdr.dwLoops = 0;
-    if (waveInPrepareHeader(hWaveIn, &waveHdr, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
+
+    if (waveInOpen(&hWaveIn, WAVE_MAPPER, &wfx, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
         return -2;
     }
-    if (waveInAddBuffer(hWaveIn, &waveHdr, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
+
+    waveHdr.lpData = (LPSTR)buffer;
+    waveHdr.dwBufferLength = BUFFER_SIZE * sizeof(short);
+    waveHdr.dwFlags = 0;
+    waveHdr.dwLoops = 0;
+
+    if (waveInPrepareHeader(hWaveIn, &waveHdr, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
         return -3;
     }
-    if (waveInStart(hWaveIn) != MMSYSERR_NOERROR) {
+
+    if (waveInAddBuffer(hWaveIn, &waveHdr, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
         return -4;
     }
+
+    if (waveInStart(hWaveIn) != MMSYSERR_NOERROR) {
+        return -5;
+    }
+
     return 0;
 }
+
 int read_pcm(int bufsize) {
     if (waveHdr.dwFlags & WHDR_DONE) {
-        return bufsize;
+        // 重置标志并重新准备缓冲区
+        waveHdr.dwFlags &= ~WHDR_DONE;
+        waveInUnprepareHeader(hWaveIn, &waveHdr, sizeof(WAVEHDR));
+        waveInPrepareHeader(hWaveIn, &waveHdr, sizeof(WAVEHDR));
+        waveInAddBuffer(hWaveIn, &waveHdr, sizeof(WAVEHDR));
+        return BUFFER_SIZE;
     }
     return 0;
 }
+
 void stop_recording() {
     waveInStop(hWaveIn);
     waveInReset(hWaveIn);
     waveInUnprepareHeader(hWaveIn, &waveHdr, sizeof(WAVEHDR));
-    waveInClose(hWaveIn);
     free(buffer);
+    waveInClose(hWaveIn);
 }
 */
 import "C"
@@ -100,7 +119,7 @@ func (r *winRecorder) StartRecording(codec Encoder) error {
 			}
 			n := C.read_pcm(C.int(framesPerBuffer))
 			if int(n) > 0 {
-				// 取出C.buffer
+				// 取出缓冲区数据
 				buf := (*[1 << 20]C.short)(unsafe.Pointer(C.buffer))[:int(n)]
 				// 回调PCM数据
 				if r.onPCMData != nil {
@@ -119,7 +138,7 @@ func (r *winRecorder) StartRecording(codec Encoder) error {
 					}
 					r.onAudioData(b)
 				}
-				time.Sleep(60 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 			} else {
 				time.Sleep(10 * time.Millisecond)
 			}
@@ -139,15 +158,19 @@ func (r *winRecorder) StopRecording() error {
 	C.stop_recording()
 	return nil
 }
+
 func (r *winRecorder) Close() error {
 	return r.StopRecording()
 }
+
 func (r *winRecorder) SetAudioDataCallback(cb func([]byte)) {
 	r.onAudioData = cb
 }
+
 func (r *winRecorder) SetPCMDataCallback(cb func([]int16, int)) {
 	r.onPCMData = cb
 }
+
 func (r *winRecorder) IsRecording() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
