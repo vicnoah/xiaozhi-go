@@ -89,11 +89,26 @@ jobs:
         cd dist
         zip -r ../xiaozhi-client-windows.zip *
 
-    - name: Upload artifacts
+    - name: Upload Linux artifact
+      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
-        name: xiaozhi-client-${{ matrix.os }}
-        path: ${{ matrix.os == 'windows-latest' && 'xiaozhi-client-windows.zip' || 'xiaozhi-client-' + matrix.os + '.tar.gz' }}
+        name: xiaozhi-client-ubuntu-latest
+        path: xiaozhi-client-ubuntu-latest.tar.gz
+
+    - name: Upload macOS artifact
+      if: matrix.os == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: xiaozhi-client-macos-latest
+        path: xiaozhi-client-macos-latest.tar.gz
+
+    - name: Upload Windows artifact
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: xiaozhi-client-windows-latest
+        path: xiaozhi-client-windows.zip
 
   release:
     name: Release
