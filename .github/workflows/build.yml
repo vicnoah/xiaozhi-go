@@ -35,7 +35,9 @@ jobs:
 
     - name: Install audio libraries (macOS only)
       if: matrix.os == 'macos-latest'
-      run: brew install portaudio opus opusfile pkg-config
+      run: |
+        brew install --build-from-source portaudio opus opusfile pkg-config
+        arch -x86_64 brew install --build-from-source opus opusfile pkg-config
 
     - name: Set macOS env for CGO
       if: matrix.os == 'macos-latest'
@@ -61,12 +63,13 @@ jobs:
           OUTPUT="xiaozhi-client.exe"
         elif [ "${{ matrix.os }}" = "macos-latest" ]; then
           GOOS=darwin
+          GOARCH=amd64
           OUTPUT="xiaozhi-client"
         else
           GOOS=linux
+          GOARCH=amd64
           OUTPUT="xiaozhi-client"
         fi
-        GOARCH=amd64 \
         CGO_ENABLED=1 \
         go build -x -v -o $OUTPUT ./cmd/client
 
