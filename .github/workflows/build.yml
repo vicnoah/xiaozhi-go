@@ -1,128 +1,93 @@
-name: 构建应用
+name: Build and Release
 
 on:
   push:
-    branches: [main, master]
-    tags: ['V*']
+    tags:
+      - 'v*'
   pull_request:
-    branches: [main, master]
-  workflow_dispatch:
+    branches: [ main ]
 
 jobs:
   build:
-    name: 构建 ${{ matrix.os }}
+    name: Build
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - os: ubuntu-latest
-            output_name: xiaozhi-client-linux
-            asset_name: xiaozhi-client-linux
-          - os: macos-latest
-            output_name: xiaozhi-client-macos
-            asset_name: xiaozhi-client-macos
-          - os: windows-latest
-            output_name: xiaozhi-client-windows.exe
-            asset_name: xiaozhi-client-windows
+        go-version: [1.21.x]
 
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: 设置Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+        cache: true
 
-      - name: 安装依赖 (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev libasound2-dev libopus-dev pkg-config libopusfile-dev libpulse-dev
-        env:
-          DEBIAN_FRONTEND: noninteractive
+    - name: Install dependencies
+      run: |
+        go mod download
+        go mod verify
 
-      - name: 安装依赖 (macOS)
-        if: matrix.os == 'macos-latest'
-        run: brew install portaudio opus opusfile pkg-config
+    - name: Run tests
+      run: go test -v ./...
 
-      - name: 设置macOS环境变量
-        if: matrix.os == 'macos-latest'
-        run: |
-          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "CGO_CFLAGS=-I$(brew --prefix)/include -I$(brew --prefix)/include/opus" >> $GITHUB_ENV
-          echo "CGO_LDFLAGS=-L$(brew --prefix)/lib -lopus" >> $GITHUB_ENV
+    - name: Build
+      shell: bash
+      run: |
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          GOOS=windows
+          OUTPUT="xiaozhi-client.exe"
+        elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+          GOOS=darwin
+          OUTPUT="xiaozhi-client"
+        else
+          GOOS=linux
+          OUTPUT="xiaozhi-client"
+        fi
+        
+        GOARCH=amd64 \
+        go build -v -o $OUTPUT ./cmd/client
 
-      - name: 安装依赖 (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install mingw-w64 -y
-          echo "已安装 mingw-w64 和 gcc 工具链"
+    - name: Prepare Windows artifacts
+      if: matrix.os == 'windows-latest'
+      shell: bash
+      run: |
+        mkdir -p dist
+        cp xiaozhi-client.exe dist/
+        cp cmd/client/opus.dll dist/
+        cd dist
+        zip -r ../xiaozhi-client-windows.zip *
 
-      - name: 获取依赖
-        run: go mod tidy
-
-      - name: 构建应用
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION=$(echo $GITHUB_REF | sed -e 's/refs\/tags\/V//' -e 's/refs\/heads\///')
-          if [ -z "$VERSION" ]; then
-            VERSION="dev"
-          fi
-          go build -x -v -work -o ${{ matrix.output_name }} -ldflags "-X main.Version=${VERSION}" ./cmd/client
-        env:
-          CGO_ENABLED: 1
-
-      - name: 压缩构建产物
-        run: tar -czvf ${{ matrix.asset_name }}.tar.gz ${{ matrix.output_name }}
-
-      - name: 压缩构建产物 (Windows)
-        if: matrix.os == 'windows-latest'
-        run: Compress-Archive -Path ${{ matrix.output_name }} -DestinationPath ${{ matrix.asset_name }}.zip
-
-      - name: 拷贝 opus.dll (Windows)
-        if: matrix.os == 'windows-latest'
-        run: Copy-Item -Path ./cmd/client/opus.dll -Destination .
-
-      - name: 上传构建产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset_name }}
-          path: ${{ matrix.asset_name }}.tar.gz
-          if-no-files-found: warn
-          retention-days: 5
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: xiaozhi-client-${{ matrix.os }}
+        path: ${{ matrix.os == 'windows-latest' && 'xiaozhi-client-windows.zip' || matrix.os == 'macos-latest' && 'xiaozhi-client' || 'xiaozhi-client' }}
 
   release:
-    name: 创建发布
+    name: Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/V')
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
-      - name: 下载所有构建产物
-        uses: actions/download-artifact@v4
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
 
-      - name: 展示下载的文件
-        run: ls -R
-
-      - name: 检查标签信息
-        run: |
-          echo "处理的标签: ${{ github.ref }}"
-          echo "标签名称: ${{ github.ref_name }}"
-          echo "触发事件: ${{ github.event_name }}"
-
-      - name: 创建发布
-        uses: softprops/action-gh-release@v2
-        with:
-          name: 发布 ${{ github.ref_name }}
-          files: |
-            xiaozhi-client-linux/xiaozhi-client-linux.tar.gz
-            xiaozhi-client-macos/xiaozhi-client-macos.tar.gz
-            xiaozhi-client-windows/xiaozhi-client-windows.zip
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/xiaozhi-client-ubuntu-latest
+          artifacts/xiaozhi-client-macos-latest
+          artifacts/xiaozhi-client-windows-latest
+        draft: false
+        prerelease: false
+        generate_release_notes: true
