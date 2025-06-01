@@ -34,7 +34,7 @@ jobs:
       - name: 设置Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.20'
+          go-version: '1.23'
           cache: true
 
       - name: 安装依赖 (Linux)

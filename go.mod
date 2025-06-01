@@ -1,6 +1,6 @@
 module github.com/justa-cai/xiaozhi-go
 
-go 1.23.3
+go 1.23
 
 require (
 	github.com/google/uuid v1.6.0
