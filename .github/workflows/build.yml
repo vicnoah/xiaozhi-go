@@ -59,7 +59,7 @@ jobs:
         fi
         
         GOARCH=amd64 \
-        go build -v -o $OUTPUT ./cmd/client
+        go build -x -v -o $OUTPUT ./cmd/client
 
     - name: Prepare Windows artifacts
       if: matrix.os == 'windows-latest'
