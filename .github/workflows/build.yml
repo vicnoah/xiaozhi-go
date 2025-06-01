@@ -33,6 +33,12 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: sudo apt-get update && sudo apt-get install -y libasound2-dev libopus-dev libpulse-dev
 
+    - name: Install audio libraries (macOS only)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew update
+        brew install opus
+
     - name: Install dependencies
       run: |
         go mod download
