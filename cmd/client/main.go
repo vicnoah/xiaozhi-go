@@ -20,6 +20,7 @@ import (
 	"github.com/justa-cai/xiaozhi-go/internal/ota"
 	"github.com/justa-cai/xiaozhi-go/internal/protocol"
 	"github.com/sirupsen/logrus"
+	"github.com/eiannone/keyboard"
 )
 
 // 常量
@@ -1027,6 +1028,13 @@ func isDeviceActivated() bool {
 
 // readInput 处理按键输入
 func readInput(keyPressCh chan<- string, commandCh chan<- string) {
+
+	// 添加 Windows 检测
+	if runtime.GOOS == "windows" {
+		readInputWindows(keyPressCh, commandCh)
+		return
+	}
+	
 	// 设置终端为原始模式
 	if err := exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run(); err != nil {
 		logrus.Errorf("设置终端cbreak模式失败: %v", err)
@@ -1079,6 +1087,46 @@ func readInput(keyPressCh chan<- string, commandCh chan<- string) {
 			}
 		}
 	}
+}
+
+// 添加 Windows 专用的输入读取函数
+func readInputWindows(keyPressCh chan<- string, commandCh chan<- string) {
+    // 使用 github.com/eiannone/keyboard 包
+    if err := keyboard.Open(); err != nil {
+        logrus.Errorf("无法打开键盘: %v", err)
+        return
+    }
+    defer keyboard.Close()
+
+    recordKeyPressed := false
+
+    for {
+        char, key, err := keyboard.GetKey()
+        if err != nil {
+            logrus.Errorf("读取输入失败: %v", err)
+            continue
+        }
+
+        // 处理退出
+        if key == keyboard.KeyEsc || char == 'q' || char == 'Q' {
+            commandCh <- "quit"
+            continue
+        }
+
+        // 处理录音键
+        switch {
+        case key == keyboard.KeyF2 || char == 'f' || char == 'F':
+            if !recordKeyPressed {
+                recordKeyPressed = true
+                keyPressCh <- "F2_PRESSED"
+            }
+        case key == keyboard.KeyF3 || char == 's' || char == 'S':
+            if recordKeyPressed {
+                recordKeyPressed = false
+                keyPressCh <- "F2_RELEASED"
+            }
+        }
+    }
 }
 
 // reinitializeOpusDecoder 重新初始化Opus解码器
