@@ -293,6 +293,7 @@ func main() {
 	// 如果设备未激活，则返回
 	if !isDeviceActivated() {
 		logrus.Error("设备未激活，请先激活设备")
+		logrus.Error("跳过激活")
 		// return
 	}
 
