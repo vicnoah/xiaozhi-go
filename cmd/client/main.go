@@ -14,6 +14,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"runtime"
 
 	"github.com/justa-cai/xiaozhi-go/internal/audio"
 	"github.com/justa-cai/xiaozhi-go/internal/client"
