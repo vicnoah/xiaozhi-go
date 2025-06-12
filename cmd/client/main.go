@@ -293,7 +293,7 @@ func main() {
 	// 如果设备未激活，则返回
 	if !isDeviceActivated() {
 		logrus.Error("设备未激活，请先激活设备")
-		return
+		// return
 	}
 
 	// 初始化音频系统
